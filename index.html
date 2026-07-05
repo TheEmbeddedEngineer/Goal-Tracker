@@ -473,7 +473,8 @@ function allWeekKeys() {
 
 function renderHistory() {
   const viewedWeekKey = dstr(viewedWeekMonday);
-  const weeks = allWeekKeys().filter(w => w !== viewedWeekKey);
+  const nowWeekKey = dstr(getMonday(new Date()));
+  const weeks = allWeekKeys().filter(w => w !== viewedWeekKey && w !== nowWeekKey);
   const list = document.getElementById('historyList');
   if (weeks.length === 0) { list.innerHTML = '<div class="empty">No completed weeks yet</div>'; return; }
 
