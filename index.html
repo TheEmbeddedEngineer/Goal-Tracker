@@ -168,6 +168,7 @@ const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport
 const DAY_LABELS = ['M','T','W','T','F','S','S'];
 let entries = {};
 let settings = { p1: 'You', p2: 'Partner', thresholds: { nutrition:5, screen:5, sport:5 } };
+let weeklyThresholds = {};
 let activePerson = 'p1';
 let viewedWeekMonday = null;
 let coupleCode = '';
@@ -194,6 +195,7 @@ function applyRemoteData(data) {
   applyingRemoteUpdate = true;
   entries = data.entries || {};
   settings = data.settings || settings;
+  weeklyThresholds = data.weeklyThresholds || {};
   document.getElementById('p1Name').value = settings.p1;
   document.getElementById('p2Name').value = settings.p2;
   document.getElementById('thNutrition').value = settings.thresholds.nutrition;
@@ -201,6 +203,7 @@ function applyRemoteData(data) {
   document.getElementById('thSport').value = settings.thresholds.sport;
   try { localStorage.setItem('entries', JSON.stringify(entries)); } catch (err) {}
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (err) {}
+  try { localStorage.setItem('weeklyThresholds', JSON.stringify(weeklyThresholds)); } catch (err) {}
   renderPersonTabs();
   loadCheckboxesForDate();
   renderAll();
@@ -217,7 +220,7 @@ function subscribeToCloud(code) {
       if (snap.exists()) {
         applyRemoteData(snap.data());
       } else {
-        setDoc(ref, { entries, settings }).catch(err => console.error(err));
+        setDoc(ref, { entries, settings, weeklyThresholds }).catch(err => console.error(err));
       }
       setSyncStatus('Synced as "' + code + '"');
     }, (err) => {
@@ -231,7 +234,7 @@ async function pushToCloud() {
   if (!coupleCode || applyingRemoteUpdate) return;
   try {
     await ensureAuth();
-    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings });
+    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings, weeklyThresholds });
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error: could not save');
@@ -271,6 +274,10 @@ async function loadData() {
     const s = localStorage.getItem('settings');
     settings = s ? JSON.parse(s) : settings;
   } catch (err) {}
+  try {
+    const wt = localStorage.getItem('weeklyThresholds');
+    weeklyThresholds = wt ? JSON.parse(wt) : {};
+  } catch (err) { weeklyThresholds = {}; }
 
   document.getElementById('p1Name').value = settings.p1;
   document.getElementById('p2Name').value = settings.p2;
@@ -351,6 +358,20 @@ async function saveDay() {
   pushToCloud();
 }
 
+function thresholdsForWeek(weekMonday) {
+  const key = dstr(weekMonday);
+  const nowMonday = getMonday(new Date());
+  if (weekMonday.getTime() < nowMonday.getTime()) {
+    if (!weeklyThresholds[key]) {
+      weeklyThresholds[key] = { ...settings.thresholds };
+      try { localStorage.setItem('weeklyThresholds', JSON.stringify(weeklyThresholds)); } catch (err) {}
+      pushToCloud();
+    }
+    return weeklyThresholds[key];
+  }
+  return settings.thresholds;
+}
+
 function catCountsForWeek(personKey, weekMonday) {
   const counts = { nutrition:0, screen:0, sport:0 };
   const personEntries = entries[personKey] || {};
@@ -407,13 +428,14 @@ function renderThisWeek() {
   document.getElementById('nextWeekBtn').style.cursor = isCurrentWeek ? 'default' : 'pointer';
 
   const wrap = document.getElementById('weekCols');
+  const thresholds = thresholdsForWeek(monday);
 
   wrap.innerHTML = ['p1','p2'].map(pk => {
     const name = pk==='p1' ? settings.p1 : settings.p2;
     const counts = catCountsForWeek(pk, monday);
     let fine = false;
     const rows = CATS.map(([key,label]) => {
-      const threshold = settings.thresholds[key];
+      const threshold = thresholds[key];
       const count = counts[key];
       const needed = threshold - count;
       let status, cls;
@@ -448,10 +470,11 @@ function renderHistory() {
   list.innerHTML = weeks.map(wk => {
     const monday = parseDate(wk);
     const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
+    const thresholds = thresholdsForWeek(monday);
     const rows = ['p1','p2'].map(pk => {
       const name = pk==='p1' ? settings.p1 : settings.p2;
       const counts = catCountsForWeek(pk, monday);
-      const missed = CATS.filter(([k]) => counts[k] < settings.thresholds[k]).map(([k,l])=>l+' ('+counts[k]+'/'+settings.thresholds[k]+')');
+      const missed = CATS.filter(([k]) => counts[k] < thresholds[k]).map(([k,l])=>l+' ('+counts[k]+'/'+thresholds[k]+')');
       const fine = missed.length > 0;
       const detail = missed.length ? 'missed: ' + missed.join(', ') : 'all categories met';
       return `<div class="history-person">
@@ -494,7 +517,9 @@ document.getElementById('syncCode').addEventListener('change', onSyncCodeChange)
 document.getElementById('resetBtn').addEventListener('click', async () => {
   if (!confirm('Clear all tracked data for both people? This cannot be undone.')) return;
   entries = {};
+  weeklyThresholds = {};
   try { localStorage.removeItem('entries'); } catch (err) {}
+  try { localStorage.removeItem('weeklyThresholds'); } catch (err) {}
   loadCheckboxesForDate();
   renderAll();
   pushToCloud();
