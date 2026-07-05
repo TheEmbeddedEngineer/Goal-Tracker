@@ -528,6 +528,8 @@ document.getElementById('syncCode').addEventListener('change', onSyncCodeChange)
 
 document.getElementById('resetBtn').addEventListener('click', async () => {
   if (!confirm('Clear all tracked data for both people? This cannot be undone.')) return;
+  const pw = prompt('Enter password to confirm:');
+  if (pw !== 'admin') { alert('Incorrect password.'); return; }
   entries = {};
   weeklyThresholds = {};
   try { localStorage.removeItem('entries'); } catch (err) {}
