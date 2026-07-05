@@ -71,13 +71,14 @@
   .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; }
   .heat-square { width:100%; aspect-ratio:1; border-radius:5px; background:var(--heat-0); }
   .heat-day .dlabel { font-size:10px; color:var(--text-muted); }
-  .cat-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; font-size:13px; }
-  .cat-row .catname { color:var(--text-secondary); }
-  .status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:100px; }
+  .cat-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; font-size:13px; }
+  .cat-row .catname { color:var(--text-secondary); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cat-row > span:last-child { display:flex; align-items:center; flex-shrink:0; white-space:nowrap; }
+  .status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:100px; white-space:nowrap; }
   .status.met { background:var(--green-bg); color:var(--green-text); }
   .status.ontrack { background:var(--amber-bg); color:var(--amber-text); }
   .status.missed { background:var(--red-bg); color:var(--red-text); }
-  .count { font-size:12px; color:var(--text-muted); margin-right:6px; }
+  .count { font-size:12px; color:var(--text-muted); margin-right:6px; white-space:nowrap; }
   .fine-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:600; }
   .fine-tag { font-size:11px; font-weight:600; padding:3px 9px; border-radius:100px; }
   .fine-tag.yes { background:var(--red-bg); color:var(--red-text); }
@@ -166,6 +167,7 @@ const db = getFirestore(firebaseApp);
 
 const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
 const DAY_LABELS = ['M','T','W','T','F','S','S'];
+const EARLIEST_VISIBLE_WEEK = '2026-06-29';
 let entries = {};
 let settings = { p1: 'You', p2: 'Partner', thresholds: { nutrition:5, screen:5, sport:5 } };
 let weeklyThresholds = {};
@@ -427,6 +429,11 @@ function renderThisWeek() {
   document.getElementById('nextWeekBtn').style.opacity = isCurrentWeek ? 0.4 : 1;
   document.getElementById('nextWeekBtn').style.cursor = isCurrentWeek ? 'default' : 'pointer';
 
+  const isEarliestWeek = dstr(monday) <= EARLIEST_VISIBLE_WEEK;
+  document.getElementById('prevWeekBtn').disabled = isEarliestWeek;
+  document.getElementById('prevWeekBtn').style.opacity = isEarliestWeek ? 0.4 : 1;
+  document.getElementById('prevWeekBtn').style.cursor = isEarliestWeek ? 'default' : 'pointer';
+
   const wrap = document.getElementById('weekCols');
   const thresholds = thresholdsForWeek(monday);
 
@@ -458,7 +465,7 @@ function allWeekKeys() {
   ['p1','p2'].forEach(pk => {
     Object.keys(entries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
   });
-  return Array.from(keys).sort().reverse();
+  return Array.from(keys).filter(k => k >= EARLIEST_VISIBLE_WEEK).sort().reverse();
 }
 
 function renderHistory() {
@@ -499,6 +506,7 @@ document.querySelectorAll('.goal-row').forEach(row => {
 
 document.getElementById('saveBtn').addEventListener('click', saveDay);
 document.getElementById('prevWeekBtn').addEventListener('click', () => {
+  if (dstr(viewedWeekMonday) <= EARLIEST_VISIBLE_WEEK) return;
   viewedWeekMonday.setDate(viewedWeekMonday.getDate() - 7);
   renderAll();
 });
