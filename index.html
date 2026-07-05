@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly accountability tracker</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --card: #ffffff;
+    --border: #e2e0d8;
+    --border-strong: #c9c6ba;
+    --text: #22201b;
+    --text-secondary: #6b6858;
+    --text-muted: #9a9787;
+    --green-bg: #e7f2e3; --green-text: #2f5c26; --green-border: #b9d9ae;
+    --amber-bg: #faf1de; --amber-text: #8a5a12; --amber-border: #e9cf9c;
+    --red-bg: #fbe9e7; --red-text: #93362b; --red-border: #eec2bc;
+    --accent: #b5622f;
+    --accent-text: #ffffff;
+    --p1: #3d6da8;
+    --p2: #a8467a;
+    --heat-0: #eceae2;
+    --heat-1: #cfe3c6;
+    --heat-2: #94c684;
+    --heat-3: #4f9c3c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a17; --card: #262420; --border: #3a3730; --border-strong: #4d4a40;
+      --text: #f1efe8; --text-secondary: #b4b0a3; --text-muted: #858173;
+      --green-bg: #1f3420; --green-text: #a8d39b; --green-border: #33512f;
+      --amber-bg: #3a2f1a; --amber-text: #e3bd7c; --amber-border: #5c4a26;
+      --red-bg: #3a2320; --red-text: #f0a89f; --red-border: #5c3630;
+      --accent: #d97757; --accent-text: #1c1a17;
+      --p1: #7fb0e8; --p2: #e090bb;
+      --heat-0: #34322b; --heat-1: #2f4429; --heat-2: #3c6a33; --heat-3: #4f9c3c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:1.5rem 1rem 3rem; }
+  .wrap { max-width: 680px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--text-secondary); font-size:14px; margin:0 0 1.5rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.1rem 1.25rem; margin-bottom:1rem; }
+  .card h2 { font-size:15px; font-weight:600; margin:0 0 12px; }
+  .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .settings-row > div { flex:1; min-width:120px; }
+  .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .settings-row input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .cat-threshold-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .cat-threshold-row .catlabel { flex:1; font-size:13px; }
+  .cat-threshold-row input { width:56px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; text-align:center; }
+  .cat-threshold-row .of7 { font-size:12px; color:var(--text-muted); }
+  .person-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .person-tabs button { flex:1; padding:8px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
+  .person-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .date-picker-row { margin-bottom:14px; }
+  .date-picker-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .date-picker-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .goal-row { display:flex; align-items:center; gap:12px; padding:12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; }
+  .goal-row.done { border-color:var(--green-border); background:var(--green-bg); }
+  .goal-row input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
+  .goal-row .name { font-size:14px; flex:1; }
+  button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
+  button.primary:active { transform:scale(0.98); }
+  .week-cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .week-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .week-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
+  .heatmap { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:12px; }
+  .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .heat-square { width:100%; aspect-ratio:1; border-radius:5px; background:var(--heat-0); }
+  .heat-day .dlabel { font-size:10px; color:var(--text-muted); }
+  .cat-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; font-size:13px; }
+  .cat-row .catname { color:var(--text-secondary); }
+  .status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:100px; }
+  .status.met { background:var(--green-bg); color:var(--green-text); }
+  .status.ontrack { background:var(--amber-bg); color:var(--amber-text); }
+  .status.missed { background:var(--red-bg); color:var(--red-text); }
+  .count { font-size:12px; color:var(--text-muted); margin-right:6px; }
+  .fine-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:600; }
+  .fine-tag { font-size:11px; font-weight:600; padding:3px 9px; border-radius:100px; }
+  .fine-tag.yes { background:var(--red-bg); color:var(--red-text); }
+  .fine-tag.no { background:var(--green-bg); color:var(--green-text); }
+  .history-week { border-bottom:1px solid var(--border); padding:12px 0; }
+  .history-week:last-child { border-bottom:none; }
+  .history-week .wk-title { font-size:13px; font-weight:600; margin-bottom:8px; }
+  .history-person { display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:6px; }
+  .history-person .pname { width:70px; color:var(--text-secondary); flex-shrink:0; }
+  .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:1rem 0; }
+  .link-btn { background:none; border:none; color:var(--text-muted); font-size:12px; text-decoration:underline; cursor:pointer; padding:4px; }
+  .footer-actions { display:flex; justify-content:flex-end; margin-top:1.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Weekly accountability tracker</h1>
+  <p class="sub">Weeks run Monday to Sunday. Each category has its own target number of days.</p>
+
+  <div class="card">
+    <h2>Setup</h2>
+    <div class="settings-row">
+      <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
+      <div><label>Person 2 name</label><input type="text" id="p2Name" value="Partner"></div>
+    </div>
+    <div class="settings-row">
+      <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="e.g. amin-mira"></div>
+    </div>
+    <p id="syncStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 12px;"></p>
+    <div style="margin-top:8px;">
+      <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">Days needed per category (of 7)</label>
+      <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Log a day</h2>
+    <div class="person-tabs" id="personTabs"></div>
+    <div class="date-picker-row">
+      <label>Date</label>
+      <input type="date" id="datePicker">
+    </div>
+    <div class="goal-row" data-key="nutrition"><input type="checkbox" id="cbNutrition"><span class="name">Nutrition</span></div>
+    <div class="goal-row" data-key="screen"><input type="checkbox" id="cbScreen"><span class="name">Screen time (under 3h)</span></div>
+    <div class="goal-row" data-key="sport"><input type="checkbox" id="cbSport"><span class="name">Sport</span></div>
+    <button class="primary" id="saveBtn">Save this day</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <button id="prevWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&larr;</button>
+      <h2 id="weekRangeLabel" style="margin:0;">This week</h2>
+      <button id="nextWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&rarr;</button>
+    </div>
+    <div class="week-cols" id="weekCols"></div>
+  </div>
+
+  <div class="card">
+    <h2>Past weeks</h2>
+    <div id="historyList"><div class="empty">No completed weeks yet</div></div>
+  </div>
+
+  <div class="footer-actions">
+    <button class="link-btn" id="resetBtn">Clear all data</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBlts7uMhKzrBpGl-yK6hyn6TzP-Yb3zYE",
+  authDomain: "goal-tracker-f1a70.firebaseapp.com",
+  projectId: "goal-tracker-f1a70",
+  storageBucket: "goal-tracker-f1a70.firebasestorage.app",
+  messagingSenderId: "957910892671",
+  appId: "1:957910892671:web:05ce0cd27216d98e30ff4a"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
+const DAY_LABELS = ['M','T','W','T','F','S','S'];
+let entries = {};
+let settings = { p1: 'You', p2: 'Partner', thresholds: { nutrition:5, screen:5, sport:5 } };
+let activePerson = 'p1';
+let viewedWeekMonday = null;
+let coupleCode = '';
+let unsubscribeCloud = null;
+let authReadyPromise = null;
+let applyingRemoteUpdate = false;
+
+function setSyncStatus(text) {
+  const el = document.getElementById('syncStatus');
+  if (el) el.textContent = text;
+}
+
+function ensureAuth() {
+  if (!authReadyPromise) {
+    authReadyPromise = signInAnonymously(auth).catch(err => {
+      console.error(err);
+      setSyncStatus('Sync error: could not connect');
+    });
+  }
+  return authReadyPromise;
+}
+
+function applyRemoteData(data) {
+  applyingRemoteUpdate = true;
+  entries = data.entries || {};
+  settings = data.settings || settings;
+  document.getElementById('p1Name').value = settings.p1;
+  document.getElementById('p2Name').value = settings.p2;
+  document.getElementById('thNutrition').value = settings.thresholds.nutrition;
+  document.getElementById('thScreen').value = settings.thresholds.screen;
+  document.getElementById('thSport').value = settings.thresholds.sport;
+  try { localStorage.setItem('entries', JSON.stringify(entries)); } catch (err) {}
+  try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (err) {}
+  renderPersonTabs();
+  loadCheckboxesForDate();
+  renderAll();
+  applyingRemoteUpdate = false;
+}
+
+function subscribeToCloud(code) {
+  if (unsubscribeCloud) { unsubscribeCloud(); unsubscribeCloud = null; }
+  if (!code) { setSyncStatus('Not syncing — enter a sync code above to share data across devices.'); return; }
+  setSyncStatus('Connecting…');
+  ensureAuth().then(() => {
+    const ref = doc(db, 'trackers', code);
+    unsubscribeCloud = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        applyRemoteData(snap.data());
+      } else {
+        setDoc(ref, { entries, settings }).catch(err => console.error(err));
+      }
+      setSyncStatus('Synced as "' + code + '"');
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error: ' + err.message);
+    });
+  });
+}
+
+async function pushToCloud() {
+  if (!coupleCode || applyingRemoteUpdate) return;
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings });
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error: could not save');
+  }
+}
+
+function onSyncCodeChange() {
+  const code = document.getElementById('syncCode').value.trim();
+  coupleCode = code;
+  try { localStorage.setItem('coupleCode', code); } catch (err) {}
+  subscribeToCloud(code);
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(s) { return parseDate(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function getMonday(dateObj) {
+  const d = new Date(dateObj);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function weekKeyFor(dateStr) { return dstr(getMonday(parseDate(dateStr))); }
+
+async function loadData() {
+  try {
+    const e = localStorage.getItem('entries');
+    entries = e ? JSON.parse(e) : {};
+  } catch (err) { entries = {}; }
+  try {
+    const s = localStorage.getItem('settings');
+    settings = s ? JSON.parse(s) : settings;
+  } catch (err) {}
+
+  document.getElementById('p1Name').value = settings.p1;
+  document.getElementById('p2Name').value = settings.p2;
+  document.getElementById('thNutrition').value = settings.thresholds.nutrition;
+  document.getElementById('thScreen').value = settings.thresholds.screen;
+  document.getElementById('thSport').value = settings.thresholds.sport;
+  document.getElementById('datePicker').value = todayStr();
+  document.getElementById('datePicker').max = todayStr();
+
+  viewedWeekMonday = getMonday(new Date());
+
+  renderPersonTabs();
+  loadCheckboxesForDate();
+  renderAll();
+
+  try { coupleCode = localStorage.getItem('coupleCode') || ''; } catch (err) { coupleCode = ''; }
+  document.getElementById('syncCode').value = coupleCode;
+  subscribeToCloud(coupleCode);
+}
+
+async function saveSettings() {
+  settings.p1 = document.getElementById('p1Name').value || 'You';
+  settings.p2 = document.getElementById('p2Name').value || 'Partner';
+  settings.thresholds = {
+    nutrition: parseInt(document.getElementById('thNutrition').value) || 1,
+    screen: parseInt(document.getElementById('thScreen').value) || 1,
+    sport: parseInt(document.getElementById('thSport').value) || 1
+  };
+  try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (err) {}
+  renderPersonTabs();
+  renderAll();
+  pushToCloud();
+}
+
+function renderPersonTabs() {
+  const tabs = document.getElementById('personTabs');
+  tabs.innerHTML = `
+    <button data-p="p1" class="${activePerson==='p1'?'active':''}">${settings.p1}</button>
+    <button data-p="p2" class="${activePerson==='p2'?'active':''}">${settings.p2}</button>
+  `;
+  tabs.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      activePerson = b.dataset.p;
+      renderPersonTabs();
+      loadCheckboxesForDate();
+    });
+  });
+}
+
+function selectedDate() { return document.getElementById('datePicker').value || todayStr(); }
+
+function loadCheckboxesForDate() {
+  const ds = selectedDate();
+  const day = (entries[activePerson] || {})[ds] || {};
+  document.getElementById('cbNutrition').checked = !!day.nutrition;
+  document.getElementById('cbScreen').checked = !!day.screen;
+  document.getElementById('cbSport').checked = !!day.sport;
+  updateRowStyles();
+}
+
+function updateRowStyles() {
+  document.querySelectorAll('.goal-row').forEach(row => {
+    const cb = row.querySelector('input');
+    row.classList.toggle('done', cb.checked);
+  });
+}
+
+async function saveDay() {
+  const ds = selectedDate();
+  if (!entries[activePerson]) entries[activePerson] = {};
+  entries[activePerson][ds] = {
+    nutrition: document.getElementById('cbNutrition').checked,
+    screen: document.getElementById('cbScreen').checked,
+    sport: document.getElementById('cbSport').checked
+  };
+  try { localStorage.setItem('entries', JSON.stringify(entries)); } catch (err) { console.error(err); }
+  renderAll();
+  pushToCloud();
+}
+
+function catCountsForWeek(personKey, weekMonday) {
+  const counts = { nutrition:0, screen:0, sport:0 };
+  const personEntries = entries[personKey] || {};
+  for (let i=0;i<7;i++) {
+    const d = new Date(weekMonday); d.setDate(d.getDate()+i);
+    const day = personEntries[dstr(d)];
+    if (day) { CATS.forEach(([k]) => { if (day[k]) counts[k]++; }); }
+  }
+  return counts;
+}
+
+function dayCompletionLevel(personKey, dateStr) {
+  const day = (entries[personKey] || {})[dateStr];
+  if (!day) return -1;
+  let n = 0;
+  CATS.forEach(([k]) => { if (day[k]) n++; });
+  return n;
+}
+
+function renderHeatmap(personKey, weekMonday) {
+  let html = '<div class="heatmap">';
+  for (let i=0;i<7;i++) {
+    const d = new Date(weekMonday); d.setDate(d.getDate()+i);
+    const ds = dstr(d);
+    const level = dayCompletionLevel(personKey, ds);
+    const heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
+    const title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
+    html += `<div class="heat-day" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderAll() {
+  renderThisWeek();
+  renderHistory();
+}
+
+function renderThisWeek() {
+  const monday = viewedWeekMonday;
+  const nowMonday = getMonday(new Date());
+  const isCurrentWeek = monday.getTime() === nowMonday.getTime();
+  const daysElapsed = monday.getTime() < nowMonday.getTime()
+    ? 7
+    : Math.min(7, Math.floor((new Date() - monday) / 86400000) + 1);
+  const remaining = 7 - daysElapsed;
+
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  document.getElementById('weekRangeLabel').textContent = isCurrentWeek
+    ? 'This week'
+    : fmtDate(dstr(monday)) + ' – ' + fmtDate(dstr(sunday));
+  document.getElementById('nextWeekBtn').disabled = isCurrentWeek;
+  document.getElementById('nextWeekBtn').style.opacity = isCurrentWeek ? 0.4 : 1;
+  document.getElementById('nextWeekBtn').style.cursor = isCurrentWeek ? 'default' : 'pointer';
+
+  const wrap = document.getElementById('weekCols');
+
+  wrap.innerHTML = ['p1','p2'].map(pk => {
+    const name = pk==='p1' ? settings.p1 : settings.p2;
+    const counts = catCountsForWeek(pk, monday);
+    let fine = false;
+    const rows = CATS.map(([key,label]) => {
+      const threshold = settings.thresholds[key];
+      const count = counts[key];
+      const needed = threshold - count;
+      let status, cls;
+      if (needed <= 0) { status = 'Met'; cls = 'met'; }
+      else if (needed <= remaining) { status = 'On track'; cls = 'ontrack'; }
+      else { status = 'Missed'; cls = 'missed'; fine = true; }
+      return `<div class="cat-row"><span class="catname">${label}</span><span><span class="count">${count}/${threshold}</span><span class="status ${cls}">${status}</span></span></div>`;
+    }).join('');
+    return `<div class="week-col">
+      <div class="pname" style="color:var(--${pk})">${name}</div>
+      ${renderHeatmap(pk, monday)}
+      ${rows}
+      <div class="fine-line"><span>Fine this week</span><span class="fine-tag ${fine?'yes':'no'}">${fine?'Yes':'No'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function allWeekKeys() {
+  const keys = new Set();
+  ['p1','p2'].forEach(pk => {
+    Object.keys(entries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
+  });
+  return Array.from(keys).sort().reverse();
+}
+
+function renderHistory() {
+  const viewedWeekKey = dstr(viewedWeekMonday);
+  const weeks = allWeekKeys().filter(w => w !== viewedWeekKey);
+  const list = document.getElementById('historyList');
+  if (weeks.length === 0) { list.innerHTML = '<div class="empty">No completed weeks yet</div>'; return; }
+
+  list.innerHTML = weeks.map(wk => {
+    const monday = parseDate(wk);
+    const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
+    const rows = ['p1','p2'].map(pk => {
+      const name = pk==='p1' ? settings.p1 : settings.p2;
+      const counts = catCountsForWeek(pk, monday);
+      const missed = CATS.filter(([k]) => counts[k] < settings.thresholds[k]).map(([k,l])=>l+' ('+counts[k]+'/'+settings.thresholds[k]+')');
+      const fine = missed.length > 0;
+      const detail = missed.length ? 'missed: ' + missed.join(', ') : 'all categories met';
+      return `<div class="history-person">
+        <span class="pname">${name}</span>
+        <span style="flex:1">${detail}</span>
+        <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'No fine'}</span>
+      </div>`;
+    }).join('');
+    return `<div class="history-week">
+      <div class="wk-title">${fmtDate(dstr(monday))} – ${fmtDate(dstr(sunday))}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+document.querySelectorAll('.goal-row').forEach(row => {
+  row.addEventListener('click', (evt) => {
+    if (evt.target.tagName !== 'INPUT') { const cb = row.querySelector('input'); cb.checked = !cb.checked; }
+    updateRowStyles();
+  });
+});
+
+document.getElementById('saveBtn').addEventListener('click', saveDay);
+document.getElementById('prevWeekBtn').addEventListener('click', () => {
+  viewedWeekMonday.setDate(viewedWeekMonday.getDate() - 7);
+  renderAll();
+});
+document.getElementById('nextWeekBtn').addEventListener('click', () => {
+  const nowMonday = getMonday(new Date());
+  if (viewedWeekMonday.getTime() >= nowMonday.getTime()) return;
+  viewedWeekMonday.setDate(viewedWeekMonday.getDate() + 7);
+  renderAll();
+});
+document.getElementById('datePicker').addEventListener('change', loadCheckboxesForDate);
+['p1Name','p2Name','thNutrition','thScreen','thSport'].forEach(id => {
+  document.getElementById(id).addEventListener('change', saveSettings);
+});
+document.getElementById('syncCode').addEventListener('change', onSyncCodeChange);
+
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all tracked data for both people? This cannot be undone.')) return;
+  entries = {};
+  try { localStorage.removeItem('entries'); } catch (err) {}
+  loadCheckboxesForDate();
+  renderAll();
+  pushToCloud();
+});
+
+loadData();
+</script>
+</body>
+</html>
