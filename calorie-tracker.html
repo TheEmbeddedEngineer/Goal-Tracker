@@ -51,8 +51,8 @@
   .date-picker-row { margin-bottom:14px; }
   .date-picker-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
   .date-picker-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
-  .manual-grid { display:grid; grid-template-columns: 2fr 1fr 1fr; gap:8px; margin-bottom:8px; }
-  .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr; }
+  .manual-grid { display:grid; grid-template-columns: 1.5fr 1.5fr 1fr; gap:8px; margin-bottom:8px; }
+  .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr 1fr; }
   .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
   .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
@@ -127,16 +127,18 @@
     </div>
 
     <div class="manual-grid">
-      <div><label>Food name</label><input type="text" id="foodName"></div>
+      <div><label>Food name (English)</label><input type="text" id="foodNameEn"></div>
+      <div><label>Food name (German)</label><input type="text" id="foodNameDe"></div>
       <div><label>Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
-      <div><label>Calories</label><input type="number" id="foodCalories" min="0"></div>
     </div>
-    <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Search on Google &rarr;</button>
+    <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
     <div class="manual-grid macros">
+      <div><label>Calories</label><input type="number" id="foodCalories" min="0"></div>
       <div><label>Protein (g)</label><input type="number" id="foodProtein" min="0"></div>
       <div><label>Carbs (g)</label><input type="number" id="foodCarbs" min="0"></div>
       <div><label>Fat (g)</label><input type="number" id="foodFat" min="0"></div>
     </div>
+    <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Not in our bank? Search on Google &rarr;</button>
     <button class="primary" id="addItemBtn">Add to log</button>
 
     <div id="foodItemsList"></div>
@@ -184,6 +186,7 @@ let settings = {
   p1: 'You', p2: 'Partner',
   goals: { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, protein: 120 } }
 };
+let foodBank = [];
 let activePerson = 'p1';
 let viewedMonth = null;
 let coupleCode = '';
@@ -218,9 +221,11 @@ function applyRemoteData(data) {
   applyingRemoteUpdate = true;
   entries = data.entries || {};
   settings = data.settings || settings;
+  foodBank = data.foodBank || [];
   populateSettingsInputs();
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   try { localStorage.setItem('calorie_settings', JSON.stringify(settings)); } catch (err) {}
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(foodBank)); } catch (err) {}
   renderPersonTabs();
   renderAll();
   applyingRemoteUpdate = false;
@@ -236,7 +241,7 @@ function subscribeToCloud(code) {
       if (snap.exists()) {
         applyRemoteData(snap.data());
       } else {
-        setDoc(ref, { entries, settings }).catch(err => console.error(err));
+        setDoc(ref, { entries, settings, foodBank }).catch(err => console.error(err));
       }
       setSyncStatus('Synced as "' + code + '"');
     }, (err) => {
@@ -251,7 +256,7 @@ async function pushToCloud(opts = {}) {
   try {
     await ensureAuth();
     const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'calories', coupleCode), { entries, settings }, writeOpts);
+    await setDoc(doc(db, 'calories', coupleCode), { entries, settings, foodBank }, writeOpts);
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error: could not save');
@@ -325,24 +330,81 @@ function dayTotals(person, dateStr) {
 }
 
 function clearManualFields() {
-  document.getElementById('foodName').value = '';
+  document.getElementById('foodNameEn').value = '';
+  document.getElementById('foodNameDe').value = '';
   document.getElementById('foodCalories').value = '';
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
+  document.getElementById('bankStatus').textContent = '';
+}
+
+function normName(s) { return (s || '').trim().toLowerCase(); }
+
+function findInBank(name) {
+  const n = normName(name);
+  if (!n) return null;
+  return foodBank.find(f => normName(f.en) === n || normName(f.de) === n) || null;
+}
+
+function fillFromBankEntry(entry, grams) {
+  const factor = (grams || 0) / 100;
+  document.getElementById('foodCalories').value = Math.round(entry.caloriesPer100 * factor);
+  document.getElementById('foodProtein').value = Math.round(entry.proteinPer100 * factor * 10) / 10;
+  document.getElementById('foodCarbs').value = Math.round(entry.carbsPer100 * factor * 10) / 10;
+  document.getElementById('foodFat').value = Math.round(entry.fatPer100 * factor * 10) / 10;
+}
+
+function onFoodNameInput() {
+  const nameEn = document.getElementById('foodNameEn').value;
+  const nameDe = document.getElementById('foodNameDe').value;
+  const match = findInBank(nameEn) || findInBank(nameDe);
+  const statusEl = document.getElementById('bankStatus');
+  if (match) {
+    const grams = parseFloat(document.getElementById('foodGrams').value) || 100;
+    if (!document.getElementById('foodNameEn').value.trim()) document.getElementById('foodNameEn').value = match.en;
+    if (!document.getElementById('foodNameDe').value.trim()) document.getElementById('foodNameDe').value = match.de;
+    fillFromBankEntry(match, grams);
+    statusEl.textContent = '✓ Found in your food bank — macros auto-filled for ' + grams + 'g.';
+  } else {
+    statusEl.textContent = nameEn.trim() || nameDe.trim() ? 'Not in your food bank yet — enter values manually or search Google, and it’ll be saved for next time.' : '';
+  }
+}
+
+function onGramsInput() {
+  const nameEn = document.getElementById('foodNameEn').value;
+  const nameDe = document.getElementById('foodNameDe').value;
+  const match = findInBank(nameEn) || findInBank(nameDe);
+  if (match) fillFromBankEntry(match, parseFloat(document.getElementById('foodGrams').value) || 0);
 }
 
 function searchOnGoogle() {
-  const name = document.getElementById('foodName').value.trim();
+  const name = (document.getElementById('foodNameEn').value || document.getElementById('foodNameDe').value).trim();
   if (!name) { alert('Enter a food name first.'); return; }
   const grams = document.getElementById('foodGrams').value || '100';
   const q = `${name} calories protein per ${grams}g`;
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
+function saveToBankIfNew(nameEn, nameDe, grams, calories, protein, carbs, fat) {
+  if (findInBank(nameEn) || findInBank(nameDe)) return;
+  if (!grams || grams <= 0) return;
+  const factor = 100 / grams;
+  foodBank.push({
+    en: nameEn || nameDe,
+    de: nameDe || nameEn,
+    caloriesPer100: Math.round(calories * factor),
+    proteinPer100: Math.round(protein * factor * 10) / 10,
+    carbsPer100: Math.round(carbs * factor * 10) / 10,
+    fatPer100: Math.round(fat * factor * 10) / 10
+  });
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(foodBank)); } catch (err) {}
+}
+
 async function addItem() {
-  const name = document.getElementById('foodName').value.trim();
-  if (!name) { alert('Enter a food name.'); return; }
+  const nameEn = document.getElementById('foodNameEn').value.trim();
+  const nameDe = document.getElementById('foodNameDe').value.trim();
+  if (!nameEn && !nameDe) { alert('Enter a food name.'); return; }
   const grams = parseFloat(document.getElementById('foodGrams').value) || 0;
   const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
   const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
@@ -351,7 +413,8 @@ async function addItem() {
   const ds = selectedDate();
   if (!entries[activePerson]) entries[activePerson] = {};
   if (!entries[activePerson][ds]) entries[activePerson][ds] = { items: [] };
-  entries[activePerson][ds].items.push({ name, grams, calories, protein, carbs, fat });
+  entries[activePerson][ds].items.push({ name: nameEn || nameDe, nameEn, nameDe, grams, calories, protein, carbs, fat });
+  saveToBankIfNew(nameEn, nameDe, grams, calories, protein, carbs, fat);
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   clearManualFields();
   renderLogCard();
@@ -455,6 +518,7 @@ async function loadData() {
     const s = localStorage.getItem('calorie_settings');
     settings = s ? JSON.parse(s) : settings;
   } catch (err) {}
+  try { foodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { foodBank = []; }
 
   populateSettingsInputs();
   document.getElementById('datePicker').value = todayStr();
@@ -471,6 +535,9 @@ async function loadData() {
   subscribeToCloud(coupleCode);
 }
 
+document.getElementById('foodNameEn').addEventListener('input', onFoodNameInput);
+document.getElementById('foodNameDe').addEventListener('input', onFoodNameInput);
+document.getElementById('foodGrams').addEventListener('input', onGramsInput);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
 document.getElementById('addItemBtn').addEventListener('click', addItem);
 document.getElementById('datePicker').addEventListener('change', renderLogCard);
