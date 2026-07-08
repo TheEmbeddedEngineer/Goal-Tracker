@@ -51,14 +51,6 @@
   .date-picker-row { margin-bottom:14px; }
   .date-picker-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
   .date-picker-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
-  .search-row { display:flex; gap:8px; margin-bottom:8px; }
-  .search-row input[type=text] { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
-  .search-row button { padding:8px 14px; border:1px solid var(--border-strong); border-radius:6px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
-  .search-results { margin-bottom:12px; max-height:220px; overflow-y:auto; }
-  .search-result { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:6px; font-size:13px; }
-  .search-result .sr-name { flex:1; min-width:0; }
-  .search-result .sr-macros { font-size:11px; color:var(--text-muted); }
-  .search-result button { flex-shrink:0; padding:5px 10px; border:1px solid var(--accent); border-radius:6px; background:none; color:var(--accent); font-size:12px; cursor:pointer; }
   .manual-grid { display:grid; grid-template-columns: 2fr 1fr 1fr; gap:8px; margin-bottom:8px; }
   .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr; }
   .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
@@ -134,17 +126,12 @@
       <input type="date" id="datePicker">
     </div>
 
-    <div class="search-row">
-      <input type="text" id="foodQuery" placeholder="Search a food, e.g. chicken breast">
-      <button id="searchBtn">Search</button>
-    </div>
-    <div class="search-results" id="searchResults"></div>
-
     <div class="manual-grid">
       <div><label>Food name</label><input type="text" id="foodName"></div>
       <div><label>Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
       <div><label>Calories</label><input type="number" id="foodCalories" min="0"></div>
     </div>
+    <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Search on Google &rarr;</button>
     <div class="manual-grid macros">
       <div><label>Protein (g)</label><input type="number" id="foodProtein" min="0"></div>
       <div><label>Carbs (g)</label><input type="number" id="foodCarbs" min="0"></div>
@@ -192,8 +179,6 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-const FDC_API_KEY = "DEMO_KEY";
-
 let entries = {};
 let settings = {
   p1: 'You', p2: 'Partner',
@@ -205,7 +190,6 @@ let coupleCode = '';
 let unsubscribeCloud = null;
 let authReadyPromise = null;
 let applyingRemoteUpdate = false;
-let lastPer100 = null;
 
 function todayStr() {
   const d = new Date();
@@ -346,61 +330,14 @@ function clearManualFields() {
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
-  lastPer100 = null;
 }
 
-function recomputeFromGrams() {
-  if (!lastPer100) return;
-  const grams = parseFloat(document.getElementById('foodGrams').value) || 0;
-  const factor = grams / 100;
-  document.getElementById('foodCalories').value = Math.round(lastPer100.calories * factor);
-  document.getElementById('foodProtein').value = Math.round(lastPer100.protein * factor * 10) / 10;
-  document.getElementById('foodCarbs').value = Math.round(lastPer100.carbs * factor * 10) / 10;
-  document.getElementById('foodFat').value = Math.round(lastPer100.fat * factor * 10) / 10;
-}
-
-function getNutrientValue(foodNutrients, name, unit) {
-  const n = (foodNutrients||[]).find(x => x.nutrientName === name && (!unit || x.unitName === unit));
-  return n ? n.value : 0;
-}
-
-async function searchFood() {
-  const query = document.getElementById('foodQuery').value.trim();
-  const resultsEl = document.getElementById('searchResults');
-  if (!query) { resultsEl.innerHTML = ''; return; }
-  resultsEl.innerHTML = '<div class="empty">Searching…</div>';
-  try {
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${FDC_API_KEY}&query=${encodeURIComponent(query)}&pageSize=6`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Request failed (' + res.status + ')');
-    const data = await res.json();
-    const foods = data.foods || [];
-    if (foods.length === 0) { resultsEl.innerHTML = '<div class="empty">No matches found.</div>'; return; }
-    resultsEl.innerHTML = foods.map((f, i) => {
-      const cal = getNutrientValue(f.foodNutrients, 'Energy', 'KCAL');
-      const prot = getNutrientValue(f.foodNutrients, 'Protein');
-      return `<div class="search-result">
-        <div class="sr-name">${f.description}<div class="sr-macros">${Math.round(cal)} kcal · ${Math.round(prot)}g protein per 100g</div></div>
-        <button data-idx="${i}">Use</button>
-      </div>`;
-    }).join('');
-    resultsEl.querySelectorAll('button[data-idx]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const f = foods[parseInt(btn.dataset.idx)];
-        lastPer100 = {
-          calories: getNutrientValue(f.foodNutrients, 'Energy', 'KCAL'),
-          protein: getNutrientValue(f.foodNutrients, 'Protein'),
-          carbs: getNutrientValue(f.foodNutrients, 'Carbohydrate, by difference'),
-          fat: getNutrientValue(f.foodNutrients, 'Total lipid (fat)')
-        };
-        document.getElementById('foodName').value = f.description;
-        recomputeFromGrams();
-      });
-    });
-  } catch (err) {
-    console.error(err);
-    resultsEl.innerHTML = '<div class="empty">Search failed. You can still enter values manually below.</div>';
-  }
+function searchOnGoogle() {
+  const name = document.getElementById('foodName').value.trim();
+  if (!name) { alert('Enter a food name first.'); return; }
+  const grams = document.getElementById('foodGrams').value || '100';
+  const q = `${name} calories protein per ${grams}g`;
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
 async function addItem() {
@@ -417,8 +354,6 @@ async function addItem() {
   entries[activePerson][ds].items.push({ name, grams, calories, protein, carbs, fat });
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   clearManualFields();
-  document.getElementById('foodQuery').value = '';
-  document.getElementById('searchResults').innerHTML = '';
   renderLogCard();
   renderMonth();
   pushToCloud();
@@ -536,12 +471,7 @@ async function loadData() {
   subscribeToCloud(coupleCode);
 }
 
-document.getElementById('searchBtn').addEventListener('click', searchFood);
-document.getElementById('foodQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchFood(); } });
-document.getElementById('foodGrams').addEventListener('input', recomputeFromGrams);
-['foodCalories','foodProtein','foodCarbs','foodFat'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => { lastPer100 = null; });
-});
+document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
 document.getElementById('addItemBtn').addEventListener('click', addItem);
 document.getElementById('datePicker').addEventListener('change', renderLogCard);
 
