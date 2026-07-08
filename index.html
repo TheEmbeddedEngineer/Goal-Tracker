@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weekly accountability tracker</title>
+<link rel="icon" type="image/png" href="icon-weekly.png">
+<link rel="apple-touch-icon" href="icon-weekly.png">
 <style>
   :root {
     --bg: #faf9f6;
@@ -44,6 +46,8 @@
   .sub { color:var(--text-secondary); font-size:14px; margin:0 0 1.5rem; }
   .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.1rem 1.25rem; margin-bottom:1rem; }
   .card h2 { font-size:15px; font-weight:600; margin:0 0 12px; }
+  #setupArrow { font-size:12px; color:var(--text-muted); transition:transform 0.15s; }
+  #setupBody.collapsed { display:none; }
   .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .settings-row > div { flex:1; min-width:120px; }
   .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
@@ -102,20 +106,22 @@
   <p class="sub">Weeks run Monday to Sunday. Each category has its own target number of days.</p>
 
   <div class="card">
-    <h2>Setup</h2>
-    <div class="settings-row">
-      <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
-      <div><label>Person 2 name</label><input type="text" id="p2Name" value="Partner"></div>
-    </div>
-    <div class="settings-row">
-      <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
-    </div>
-    <p id="syncStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 12px;"></p>
-    <div style="margin-top:8px;">
-      <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">Days needed per category (of 7)</label>
-      <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-      <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-      <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+    <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Setup <span id="setupArrow">&#9656;</span></h2>
+    <div id="setupBody">
+      <div class="settings-row">
+        <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
+        <div><label>Person 2 name</label><input type="text" id="p2Name" value="Partner"></div>
+      </div>
+      <div class="settings-row">
+        <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
+      </div>
+      <p id="syncStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 12px;"></p>
+      <div style="margin-top:8px;">
+        <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">Days needed per category (of 7)</label>
+        <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+        <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+        <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      </div>
     </div>
   </div>
 
@@ -539,6 +545,18 @@ document.getElementById('resetBtn').addEventListener('click', async () => {
   renderAll();
   pushToCloud({ replace: true });
 });
+
+function setSetupCollapsed(collapsed) {
+  document.getElementById('setupBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('setupArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('setupCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+document.getElementById('setupToggle').addEventListener('click', () => {
+  setSetupCollapsed(!document.getElementById('setupBody').classList.contains('collapsed'));
+});
+let initialSetupCollapsed = true;
+try { initialSetupCollapsed = localStorage.getItem('setupCollapsed') !== '0'; } catch (err) {}
+setSetupCollapsed(initialSetupCollapsed);
 
 loadData();
 </script>
