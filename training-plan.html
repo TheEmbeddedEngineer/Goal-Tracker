@@ -59,6 +59,26 @@
   .freq-table th { color:var(--text-secondary); font-weight:600; font-size:12px; }
   .rule-list { margin:0; padding-left:1.1rem; font-size:13px; color:var(--text-secondary); line-height:1.6; }
   .empty-state { text-align:center; color:var(--text-muted); font-size:13px; padding:2rem 1rem; }
+  .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .settings-row > div { flex:1; min-width:120px; }
+  .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .settings-row input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  #setupArrow { font-size:12px; color:var(--text-muted); }
+  #setupBody.collapsed { display:none; }
+  .sync-status { font-size:12px; color:var(--text-muted); margin:-4px 0 12px; }
+  .log-date-row { margin-bottom:10px; }
+  .log-date-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .log-date-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .log-weight-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+  .log-weight-row .lw-name { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
+  .log-weight-row input { width:90px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
+  button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:10px; }
+  button.primary:active { transform:scale(0.98); }
+  .past-log-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; cursor:pointer; }
+  .past-log-row:last-child { border-bottom:none; }
+  .past-log-row .pl-date { flex-shrink:0; font-weight:600; width:88px; }
+  .past-log-row .pl-summary { flex:1; min-width:0; color:var(--text-secondary); font-size:12px; }
+  .past-log-row .pl-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
 </style>
 </head>
 <body>
@@ -66,16 +86,42 @@
   <h1>Training plan</h1>
   <p class="sub">Upper-body focus with tennis flexibility — 5-day rotation, 30-60 min sessions.</p>
 
+  <div class="card">
+    <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Setup <span id="setupArrow">&#9656;</span></h2>
+    <div id="setupBody">
+      <div class="settings-row">
+        <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
+        <div><label>Person 2 name</label><input type="text" id="p2Name" value="Partner"></div>
+      </div>
+      <div class="settings-row">
+        <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
+      </div>
+      <p id="syncStatus" class="sync-status"></p>
+    </div>
+  </div>
+
   <div class="person-tabs" id="personTabs"></div>
   <div class="day-tabs" id="dayTabs"></div>
 
   <div class="card" id="content"></div>
 </div>
 
-<script>
-function gsearch(term) {
-  return 'https://www.google.com/search?q=' + encodeURIComponent(term + ' site:muscleandstrength.com');
-}
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBlts7uMhKzrBpGl-yK6hyn6TzP-Yb3zYE",
+  authDomain: "goal-tracker-f1a70.firebaseapp.com",
+  projectId: "goal-tracker-f1a70",
+  storageBucket: "goal-tracker-f1a70.firebasestorage.app",
+  messagingSenderId: "957910892671",
+  appId: "1:957910892671:web:05ce0cd27216d98e30ff4a"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 
 const DAY_ORDER = ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'];
 const DAY_LABELS = { overview: 'Overview', day1: 'Day 1', day2: 'Day 2', day3: 'Day 3', day4: 'Day 4', day5: 'Day 5', backcare: 'Back care' };
@@ -109,17 +155,17 @@ const PLAN_P1 = {
       ['Rotator cuff prehab (external rotation)', '3x15', 'https://www.muscleandstrength.com/exercises/cable-external-rotation'],
       ['Barbell bench press', '4x6-8', 'https://www.muscleandstrength.com/exercises/barbell-bench-press.html'],
       ['Overhead press', '3x8-10', 'https://www.muscleandstrength.com/exercises/military-press.html'],
-      ['Incline dumbbell press', '3x10-12', gsearch('incline dumbbell press')],
-      ['Cable lateral raise', '3x12-15', gsearch('cable lateral raise')],
+      ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Cable lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-cable-lateral-raise.html'],
       ['Triceps rope pushdown', '3x12-15', 'https://www.muscleandstrength.com/exercises/rope-tricep-extension.html']
     ],
     home: [
-      ['Dumbbell external rotation', '3x15', gsearch('dumbbell external rotation')],
-      ['Dumbbell bench press (floor press if no bench)', '4x8-10', gsearch('dumbbell floor press')],
-      ['Dumbbell shoulder press', '3x8-10', gsearch('dumbbell shoulder press')],
-      ['Dumbbell close-grip floor press', '3x10-12', gsearch('close grip floor press')],
-      ['Dumbbell lateral raise', '3x12-15', gsearch('dumbbell lateral raise')],
-      ['Dumbbell overhead triceps extension', '3x12-15', gsearch('dumbbell overhead tricep extension')]
+      ['Dumbbell external rotation', '3x15', 'https://www.muscleandstrength.com/exercises/bench-supported-dumbbell-external-rotation'],
+      ['Dumbbell bench press (floor press if no bench)', '4x8-10', 'https://www.muscleandstrength.com/exercises/dumbbell-floor-press.html'],
+      ['Dumbbell shoulder press', '3x8-10', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Dumbbell close-grip floor press', '3x10-12', 'https://www.muscleandstrength.com/exercises/close-grip-dumbbell-press.html'],
+      ['Dumbbell lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Dumbbell overhead triceps extension', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-dumbbell-extension.html']
     ]
   },
   day2: {
@@ -129,17 +175,17 @@ const PLAN_P1 = {
       ['Rotator cuff prehab (band pull-apart)', '3x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
       ['Weighted pull-ups / lat pulldown', '4x8-10', 'https://www.muscleandstrength.com/exercises/lat-pull-down.html'],
       ['Seated cable row', '3x10-12', 'https://www.muscleandstrength.com/exercises/seated-row.html'],
-      ['Chest-supported dumbbell row', '3x10-12', gsearch('chest supported dumbbell row')],
+      ['Chest-supported dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
       ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
-      ['Wrist extensor curls (elbow health)', '2x15', gsearch('wrist extension')]
+      ['Wrist extensor curls (elbow health)', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
     ],
     home: [
-      ['Dumbbell reverse fly (light, slow)', '3x15', gsearch('dumbbell reverse fly')],
-      ['Heavy single-arm dumbbell row (main pull movement)', '4x8-10/side', gsearch('one arm dumbbell row')],
-      ['Two-arm bent-over dumbbell row', '3x10-12', gsearch('dumbbell bent over row')],
-      ['Chest-supported row lying face-down on a bench', '3x10-12', gsearch('chest supported dumbbell row')],
-      ['Dumbbell reverse fly, wide grip', '3x15', gsearch('dumbbell reverse fly')],
-      ['Dumbbell wrist extension', '2x15', gsearch('dumbbell wrist extension')]
+      ['Dumbbell reverse fly (light, slow)', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Heavy single-arm dumbbell row (main pull movement)', '4x8-10/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Two-arm bent-over dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-row.html'],
+      ['Chest-supported row lying face-down on a bench', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Dumbbell reverse fly, wide grip', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Dumbbell wrist extension', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
     ],
     footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows.'
   },
@@ -150,16 +196,16 @@ const PLAN_P1 = {
       ['Goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
       ['Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
       ['Bulgarian split squat', '3x10/leg', 'https://www.muscleandstrength.com/exercises/one-leg-dumbbell-squat-aka-bulgarian-squat.html'],
-      ['Lateral lunges', '3x10/side', gsearch('lateral lunge')],
-      ['Standing calf raise', '3x15', gsearch('standing calf raise')],
+      ['Lateral lunges', '3x10/side', 'https://www.muscleandstrength.com/exercises/dumbbell-side-lunge.html'],
+      ['Standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-calf-raise.html'],
       ['Rotational cable chop', '3x12/side', 'https://www.muscleandstrength.com/exercises/wood-chop.html']
     ],
     home: [
       ['Dumbbell goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
       ['Dumbbell Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
       ['Dumbbell Bulgarian split squat (rear foot on a chair/bench)', '3x10/leg', 'https://www.muscleandstrength.com/exercises/one-leg-dumbbell-squat-aka-bulgarian-squat.html'],
-      ['Dumbbell lateral lunges', '3x10/side', gsearch('lateral lunge')],
-      ['Dumbbell standing calf raise', '3x15', gsearch('standing calf raise')],
+      ['Dumbbell lateral lunges', '3x10/side', 'https://www.muscleandstrength.com/exercises/dumbbell-side-lunge.html'],
+      ['Dumbbell standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-one-leg-calf-raise-with-dumbbell.html'],
       ['Single dumbbell diagonal woodchop', '3x12/side', 'https://www.muscleandstrength.com/exercises/wood-chop.html']
     ]
   },
@@ -167,20 +213,20 @@ const PLAN_P1 = {
     title: 'Upper: hypertrophy + finisher',
     duration: '45-50 min',
     gym: [
-      ['Incline dumbbell press', '3x10-12', gsearch('incline dumbbell press')],
-      ['Dumbbell shoulder press', '3x10-12', gsearch('dumbbell shoulder press')],
-      ['Single-arm lat pulldown', '3x10-12/side', gsearch('single arm lat pulldown')],
-      ['Lateral raise + rear delt fly (superset)', '3x15 each', gsearch('dumbbell lateral raise')],
-      ['Hammer curl + skull crusher (superset)', '3x12 each', gsearch('hammer curl')],
+      ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Single-arm lat pulldown', '3x10-12/side', 'https://www.youtube.com/watch?v=eM162KNncD8'],
+      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Hammer curl + skull crusher (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/standing-hammer-curl.html'],
       ['Interval finisher (bike/row)', '10-12 min', null]
     ],
     home: [
-      ['Dumbbell incline press (feet elevated, or bench)', '3x10-12', gsearch('incline dumbbell press')],
-      ['Dumbbell shoulder press', '3x10-12', gsearch('dumbbell shoulder press')],
-      ['Single-arm dumbbell row, underhand grip', '3x10-12/side', gsearch('underhand dumbbell row')],
-      ['Lateral raise + rear delt fly (superset)', '3x15 each', gsearch('dumbbell rear delt fly')],
-      ['Hammer curl + lying dumbbell triceps extension (superset)', '3x12 each', gsearch('lying dumbbell tricep extension')],
-      ['Interval finisher: burpees, jump rope, or stair sprints', '10-12 min', gsearch('burpee form')]
+      ['Dumbbell incline press (feet elevated, or bench)', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Single-arm dumbbell row, underhand grip', '3x10-12/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Hammer curl + lying dumbbell triceps extension (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/lying-dumbbell-extension.html'],
+      ['Interval finisher: burpees, jump rope, or stair sprints', '10-12 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
     ]
   },
   day5: {
@@ -188,17 +234,17 @@ const PLAN_P1 = {
     duration: '35-40 min',
     gym: [
       ['Kettlebell swings', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
-      ['Push press', '3x8', gsearch('push press')],
+      ['Push press', '3x8', 'https://www.muscleandstrength.com/exercises/push-press'],
       ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
-      ['Med-ball rotational throws', '3x10/side', gsearch('medicine ball rotational throw')],
+      ['Med-ball rotational throws', '3x10/side', 'https://www.muscleandstrength.com/exercises/rotational-med-ball-throw'],
       ['Circuit: sled push / battle ropes / bike sprints', '15 min', null]
     ],
     home: [
       ['Single dumbbell swing (hinge, swing between legs)', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
-      ['Dumbbell push press', '3x8', gsearch('dumbbell push press')],
+      ['Dumbbell push press', '3x8', 'https://www.youtube.com/watch?v=B6EOz_LwRqU'],
       ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
-      ['Weighted Russian twists', '3x15/side', gsearch('russian twist')],
-      ['Bodyweight circuit: burpees, jump squats, mountain climbers, high knees', '15 min', gsearch('burpee jump squat mountain climber high knees')]
+      ['Weighted Russian twists', '3x15/side', 'https://www.muscleandstrength.com/exercises/weighted-side-touches.html'],
+      ['Bodyweight circuit: burpees, jump squats, mountain climbers, high knees', '15 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
     ]
   },
   backcare: {
@@ -207,29 +253,29 @@ const PLAN_P1 = {
       {
         title: 'Pre-tennis warm-up (5 min, before you play)',
         items: [
-          ['Cat-cow', '10 reps', gsearch('cat cow stretch')],
-          ['Kneeling hip flexor stretch', '30s/side', gsearch('kneeling hip flexor stretch')],
-          ['90/90 hip rotations', '8/side', gsearch('90 90 hip stretch')],
-          ['Glute bridge', '12 reps', gsearch('glute bridge')]
+          ['Cat-cow', '10 reps', 'https://www.youtube.com/watch?v=y_cKHKi9UaM'],
+          ['Kneeling hip flexor stretch', '30s/side', 'https://www.youtube.com/watch?v=Q4Ko275cluo'],
+          ['90/90 hip rotations', '8/side', 'https://www.youtube.com/watch?v=f_7qIPxw6nE'],
+          ['Glute bridge', '12 reps', 'https://www.muscleandstrength.com/exercises/bodyweight-glute-bridge']
         ]
       },
       {
         title: 'Core stability block (2-3x/week, e.g. after Day 3 or Day 5)',
         items: [
-          ['Dead bug', '3x10/side', gsearch('dead bug exercise')],
-          ['Bird dog', '3x8/side', gsearch('bird dog exercise')],
-          ['Side plank', '3x20-30s/side', gsearch('side plank')],
-          ['Pallof press (band or cable)', '3x10/side', gsearch('pallof press')],
-          ['Single-leg glute bridge', '3x12/side', gsearch('single leg glute bridge')]
+          ['Dead bug', '3x10/side', 'https://www.muscleandstrength.com/exercises/dead-bug'],
+          ['Bird dog', '3x8/side', 'https://www.muscleandstrength.com/exercises/contralateral-bird-dog'],
+          ['Side plank', '3x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html'],
+          ['Pallof press (band or cable)', '3x10/side', 'https://www.muscleandstrength.com/exercises/pallof-press'],
+          ['Single-leg glute bridge', '3x12/side', 'https://www.muscleandstrength.com/exercises/single-leg-glute-bridge']
         ]
       },
       {
         title: 'Post-tennis cool-down stretch (5 min, right after playing)',
         items: [
-          ["Child's pose", '30-45s', gsearch('childs pose stretch')],
-          ['Knee-to-chest', '30s/side', gsearch('knee to chest stretch')],
-          ['Seated spinal twist', '30s/side', gsearch('seated spinal twist')],
-          ['Piriformis stretch (figure-4)', '30s/side', gsearch('piriformis stretch figure 4')]
+          ["Child's pose", '30-45s', 'https://www.youtube.com/watch?v=jaCOZJPSy2g'],
+          ['Knee-to-chest', '30s/side', 'https://www.youtube.com/watch?v=Yd9wY25koVk'],
+          ['Seated spinal twist', '30s/side', 'https://www.youtube.com/watch?v=r5JuFoNzOU8'],
+          ['Piriformis stretch (figure-4)', '30s/side', 'https://www.youtube.com/watch?v=-g0nuyTHMrI']
         ]
       }
     ],
@@ -242,14 +288,103 @@ const PLAN_P2 = null; // no plan added yet for Partner
 let activePerson = 'p1';
 let activeDay = 'overview';
 let activeVariant = 'gym';
+let settings = { p1: 'You', p2: 'Partner' };
+let trainingLog = { p1: [], p2: [] };
+let coupleCode = '';
+let unsubscribeCloud = null;
+let authReadyPromise = null;
+let applyingRemoteUpdate = false;
 
 function currentPlan() { return activePerson === 'p1' ? PLAN_P1 : PLAN_P2; }
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function setSyncStatus(text) {
+  const el = document.getElementById('syncStatus');
+  if (el) el.textContent = text;
+}
+
+function ensureAuth() {
+  if (!authReadyPromise) {
+    authReadyPromise = signInAnonymously(auth).catch(err => {
+      console.error(err);
+      setSyncStatus('Sync error: could not connect');
+    });
+  }
+  return authReadyPromise;
+}
+
+function populateSettingsInputs() {
+  document.getElementById('p1Name').value = settings.p1;
+  document.getElementById('p2Name').value = settings.p2;
+}
+
+function applyRemoteData(data) {
+  applyingRemoteUpdate = true;
+  settings = data.settings || settings;
+  trainingLog = data.trainingLog || { p1: [], p2: [] };
+  populateSettingsInputs();
+  try { localStorage.setItem('training_settings', JSON.stringify(settings)); } catch (err) {}
+  try { localStorage.setItem('training_log', JSON.stringify(trainingLog)); } catch (err) {}
+  renderAll();
+  applyingRemoteUpdate = false;
+}
+
+function subscribeToCloud(code) {
+  if (unsubscribeCloud) { unsubscribeCloud(); unsubscribeCloud = null; }
+  if (!code) { setSyncStatus('Not syncing — enter a sync code above to share data across devices.'); return; }
+  setSyncStatus('Connecting…');
+  ensureAuth().then(() => {
+    const ref = doc(db, 'training', code);
+    unsubscribeCloud = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        applyRemoteData(snap.data());
+      } else {
+        setDoc(ref, { settings, trainingLog }).catch(err => console.error(err));
+      }
+      setSyncStatus('Synced as "' + code + '"');
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error: ' + err.message);
+    });
+  });
+}
+
+async function pushToCloud(opts = {}) {
+  if (!coupleCode || applyingRemoteUpdate) return;
+  try {
+    await ensureAuth();
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'training', coupleCode), { settings, trainingLog }, writeOpts);
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error: could not save');
+  }
+}
+
+function onSyncCodeChange() {
+  const code = document.getElementById('syncCode').value.trim();
+  coupleCode = code;
+  try { localStorage.setItem('training_coupleCode', code); } catch (err) {}
+  subscribeToCloud(code);
+}
+
+async function saveSettings() {
+  settings.p1 = document.getElementById('p1Name').value || 'You';
+  settings.p2 = document.getElementById('p2Name').value || 'Partner';
+  try { localStorage.setItem('training_settings', JSON.stringify(settings)); } catch (err) {}
+  renderPersonTabs();
+  pushToCloud();
+}
 
 function renderPersonTabs() {
   const el = document.getElementById('personTabs');
   el.innerHTML = `
-    <button data-p="p1" class="${activePerson === 'p1' ? 'active' : ''}">You</button>
-    <button data-p="p2" class="${activePerson === 'p2' ? 'active' : ''}">Partner</button>
+    <button data-p="p1" class="${activePerson === 'p1' ? 'active' : ''}">${settings.p1}</button>
+    <button data-p="p2" class="${activePerson === 'p2' ? 'active' : ''}">${settings.p2}</button>
   `;
   el.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { activePerson = b.dataset.p; renderAll(); });
@@ -270,7 +405,7 @@ function updateActiveTabStyles() {
 
 function exRow([name, reps, url]) {
   const link = url
-    ? `<span class="ex-link"><a href="${url}" target="_blank" rel="noopener">${url.includes('google.com') ? '🔍 Search' : '▶ Watch'}</a></span>`
+    ? `<span class="ex-link"><a href="${url}" target="_blank" rel="noopener">&#9654; Watch</a></span>`
     : '';
   return `<div class="ex-row"><span class="ex-name">${name}</span><span class="ex-reps">${reps}</span>${link}</div>`;
 }
@@ -291,9 +426,18 @@ function renderOverview(plan) {
   `;
 }
 
-function renderDay(day) {
+function dayLogs(person, dayKey) {
+  return (trainingLog[person] || []).filter(l => l.day === dayKey).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function findLog(person, dayKey, date, variant) {
+  return (trainingLog[person] || []).find(l => l.day === dayKey && l.date === date && l.variant === variant);
+}
+
+function renderDay(day, dayKey) {
   const hasVariants = !!(day.gym && day.home);
   const list = hasVariants ? (activeVariant === 'gym' ? day.gym : day.home) : day.gym;
+  const logs = dayLogs(activePerson, dayKey);
   return `
     <h2>${day.title}</h2>
     <p class="card-sub">${day.duration}</p>
@@ -304,8 +448,70 @@ function renderDay(day) {
       </div>` : ''}
     ${list.map(exRow).join('')}
     ${day.footnote ? `<p class="note" style="margin-top:12px;">${day.footnote}</p>` : ''}
+
+    <div class="section-title">Log this workout</div>
+    <div class="log-date-row">
+      <label>Date</label>
+      <input type="date" id="logDate">
+    </div>
+    <div id="logWeights">
+      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
+    </div>
+    <button class="primary" id="saveLogBtn">Save log</button>
+
+    <div class="section-title" style="margin-top:20px;">Past sessions</div>
+    <div id="pastLogs">
+      ${logs.length === 0 ? '<div class="empty-state" style="padding:1rem 0;">No sessions logged yet.</div>' : logs.map(l => {
+        const summary = Object.entries(l.weights).map(([n, w]) => n + ' ' + w + 'kg').join(' · ');
+        return `<div class="past-log-row" data-date="${l.date}" data-variant="${l.variant}">
+          <span class="pl-date">${l.date}</span>
+          <span class="pl-summary">${l.variant === 'home' ? 'Home' : 'Gym'} · ${summary}</span>
+          <button class="pl-del" data-date="${l.date}" data-variant="${l.variant}">&times;</button>
+        </div>`;
+      }).join('')}
+    </div>
   `;
 }
+
+function loadLogIntoForm(dayKey, list, variant) {
+  const dateInput = document.getElementById('logDate');
+  const date = dateInput.value;
+  const existing = findLog(activePerson, dayKey, date, variant);
+  list.forEach((ex, i) => {
+    const input = document.getElementById('logW_' + i);
+    if (!input) return;
+    input.value = existing && existing.weights[ex[0]] !== undefined ? existing.weights[ex[0]] : '';
+  });
+}
+
+function saveLog(dayKey, list, variant) {
+  const date = document.getElementById('logDate').value || todayStr();
+  const weights = {};
+  list.forEach((ex, i) => {
+    const v = parseFloat(document.getElementById('logW_' + i).value);
+    if (!isNaN(v)) weights[ex[0]] = v;
+  });
+  if (Object.keys(weights).length === 0) { alert('Enter at least one weight.'); return; }
+  if (!trainingLog[activePerson]) trainingLog[activePerson] = [];
+  const arr = trainingLog[activePerson];
+  const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
+  const entry = { date, day: dayKey, variant, weights };
+  if (idx >= 0) arr[idx] = entry; else arr.push(entry);
+  try { localStorage.setItem('training_log', JSON.stringify(trainingLog)); } catch (err) {}
+  pushToCloud();
+  renderContent();
+}
+
+function deleteLog(dayKey, date, variant) {
+  const arr = trainingLog[activePerson] || [];
+  const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
+  if (idx >= 0) arr.splice(idx, 1);
+  try { localStorage.setItem('training_log', JSON.stringify(trainingLog)); } catch (err) {}
+  pushToCloud();
+  renderContent();
+}
+
+let pendingViewLog = null;
 
 function renderBackCare(bc) {
   return `
@@ -331,11 +537,48 @@ function renderContent() {
   } else if (activeDay === 'backcare') {
     contentEl.innerHTML = renderBackCare(plan.backcare);
   } else {
-    contentEl.innerHTML = renderDay(plan[activeDay]);
+    const day = plan[activeDay];
+    contentEl.innerHTML = renderDay(day, activeDay);
     const gymBtn = document.getElementById('variantGym');
     const homeBtn = document.getElementById('variantHome');
     if (gymBtn) gymBtn.addEventListener('click', () => { activeVariant = 'gym'; renderContent(); });
     if (homeBtn) homeBtn.addEventListener('click', () => { activeVariant = 'home'; renderContent(); });
+
+    const hasVariants = !!(day.gym && day.home);
+    const list = hasVariants ? (activeVariant === 'gym' ? day.gym : day.home) : day.gym;
+
+    const dateInput = document.getElementById('logDate');
+    if (dateInput) {
+      dateInput.max = todayStr();
+      dateInput.value = pendingViewLog ? pendingViewLog.date : todayStr();
+      loadLogIntoForm(activeDay, list, activeVariant);
+      dateInput.addEventListener('change', () => loadLogIntoForm(activeDay, list, activeVariant));
+    }
+    pendingViewLog = null;
+
+    const saveBtn = document.getElementById('saveLogBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveLog(activeDay, list, activeVariant));
+
+    document.querySelectorAll('.pl-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteLog(activeDay, btn.dataset.date, btn.dataset.variant);
+      });
+    });
+    document.querySelectorAll('.past-log-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const date = row.dataset.date;
+        const variant = row.dataset.variant;
+        if (variant !== activeVariant) {
+          activeVariant = variant;
+          pendingViewLog = { date };
+          renderContent();
+        } else {
+          document.getElementById('logDate').value = date;
+          loadLogIntoForm(activeDay, list, activeVariant);
+        }
+      });
+    });
   }
 }
 
@@ -345,7 +588,42 @@ function renderAll() {
   renderContent();
 }
 
-renderAll();
+function setSetupCollapsed(collapsed) {
+  document.getElementById('setupBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('setupArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('training_setupCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+
+function loadData() {
+  try {
+    const s = localStorage.getItem('training_settings');
+    settings = s ? JSON.parse(s) : settings;
+  } catch (err) {}
+  try {
+    trainingLog = JSON.parse(localStorage.getItem('training_log') || '{}');
+    trainingLog.p1 = trainingLog.p1 || [];
+    trainingLog.p2 = trainingLog.p2 || [];
+  } catch (err) { trainingLog = { p1: [], p2: [] }; }
+
+  populateSettingsInputs();
+  renderAll();
+
+  try { coupleCode = localStorage.getItem('training_coupleCode') || ''; } catch (err) { coupleCode = ''; }
+  document.getElementById('syncCode').value = coupleCode;
+  subscribeToCloud(coupleCode);
+}
+
+document.getElementById('p1Name').addEventListener('change', saveSettings);
+document.getElementById('p2Name').addEventListener('change', saveSettings);
+document.getElementById('syncCode').addEventListener('change', onSyncCodeChange);
+document.getElementById('setupToggle').addEventListener('click', () => {
+  setSetupCollapsed(!document.getElementById('setupBody').classList.contains('collapsed'));
+});
+let initialSetupCollapsed = true;
+try { initialSetupCollapsed = localStorage.getItem('training_setupCollapsed') !== '0'; } catch (err) {}
+setSetupCollapsed(initialSetupCollapsed);
+
+loadData();
 </script>
 </body>
 </html>
