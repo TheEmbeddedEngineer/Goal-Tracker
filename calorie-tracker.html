@@ -126,10 +126,13 @@
       <input type="date" id="datePicker">
     </div>
 
-    <div class="manual-grid">
+    <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
       <div><label>Food name (English)</label><input type="text" id="foodNameEn"></div>
       <div><label>Food name (German)</label><input type="text" id="foodNameDe"></div>
-      <div><label>Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
+    </div>
+    <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
+      <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
+      <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Pieces (e.g. 1 egg, 1 fruit)</option></select></div>
     </div>
     <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
     <div class="manual-grid macros">
@@ -336,6 +339,8 @@ function clearManualFields() {
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
+  document.getElementById('foodUnit').value = 'gram';
+  updateAmountLabel();
   document.getElementById('bankStatus').textContent = '';
 }
 
@@ -347,12 +352,19 @@ function findInBank(name) {
   return foodBank.find(f => normName(f.en) === n || normName(f.de) === n) || null;
 }
 
-function fillFromBankEntry(entry, grams) {
-  const factor = (grams || 0) / 100;
-  document.getElementById('foodCalories').value = Math.round(entry.caloriesPer100 * factor);
-  document.getElementById('foodProtein').value = Math.round(entry.proteinPer100 * factor * 10) / 10;
-  document.getElementById('foodCarbs').value = Math.round(entry.carbsPer100 * factor * 10) / 10;
-  document.getElementById('foodFat').value = Math.round(entry.fatPer100 * factor * 10) / 10;
+function updateAmountLabel() {
+  const unit = document.getElementById('foodUnit').value;
+  document.getElementById('foodAmountLabel').textContent = unit === 'piece' ? 'Quantity (pieces)' : 'Grams';
+}
+
+// entry.calories/protein/carbs/fat are the reference values for entry.unit:
+// 100g if unit === 'gram', or 1 piece if unit === 'piece'.
+function fillFromBankEntry(entry, amount) {
+  const factor = entry.unit === 'piece' ? (amount || 0) : (amount || 0) / 100;
+  document.getElementById('foodCalories').value = Math.round(entry.calories * factor);
+  document.getElementById('foodProtein').value = Math.round(entry.protein * factor * 10) / 10;
+  document.getElementById('foodCarbs').value = Math.round(entry.carbs * factor * 10) / 10;
+  document.getElementById('foodFat').value = Math.round(entry.fat * factor * 10) / 10;
 }
 
 function onFoodNameInput() {
@@ -361,17 +373,20 @@ function onFoodNameInput() {
   const match = findInBank(nameEn) || findInBank(nameDe);
   const statusEl = document.getElementById('bankStatus');
   if (match) {
-    const grams = parseFloat(document.getElementById('foodGrams').value) || 100;
+    document.getElementById('foodUnit').value = match.unit;
+    updateAmountLabel();
+    const amount = parseFloat(document.getElementById('foodGrams').value) || (match.unit === 'piece' ? 1 : 100);
     if (!document.getElementById('foodNameEn').value.trim()) document.getElementById('foodNameEn').value = match.en;
     if (!document.getElementById('foodNameDe').value.trim()) document.getElementById('foodNameDe').value = match.de;
-    fillFromBankEntry(match, grams);
-    statusEl.textContent = '✓ Found in your food bank — macros auto-filled for ' + grams + 'g.';
+    fillFromBankEntry(match, amount);
+    statusEl.textContent = '✓ Found in your food bank — macros auto-filled for ' + amount + (match.unit === 'piece' ? ' piece(s).' : 'g.');
   } else {
     statusEl.textContent = nameEn.trim() || nameDe.trim() ? 'Not in your food bank yet — enter values manually or search Google, and it’ll be saved for next time.' : '';
   }
 }
 
-function onGramsInput() {
+function onAmountOrUnitInput() {
+  updateAmountLabel();
   const nameEn = document.getElementById('foodNameEn').value;
   const nameDe = document.getElementById('foodNameDe').value;
   const match = findInBank(nameEn) || findInBank(nameDe);
@@ -381,22 +396,24 @@ function onGramsInput() {
 function searchOnGoogle() {
   const name = (document.getElementById('foodNameEn').value || document.getElementById('foodNameDe').value).trim();
   if (!name) { alert('Enter a food name first.'); return; }
-  const grams = document.getElementById('foodGrams').value || '100';
-  const q = `${name} calories protein per ${grams}g`;
+  const amount = document.getElementById('foodGrams').value || '100';
+  const unit = document.getElementById('foodUnit').value;
+  const q = unit === 'piece' ? `${name} calories protein per piece` : `${name} calories protein per ${amount}g`;
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
-function saveToBankIfNew(nameEn, nameDe, grams, calories, protein, carbs, fat) {
+function saveToBankIfNew(nameEn, nameDe, unit, amount, calories, protein, carbs, fat) {
   if (findInBank(nameEn) || findInBank(nameDe)) return;
-  if (!grams || grams <= 0) return;
-  const factor = 100 / grams;
+  if (!amount || amount <= 0) return;
+  const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
   foodBank.push({
     en: nameEn || nameDe,
     de: nameDe || nameEn,
-    caloriesPer100: Math.round(calories * factor),
-    proteinPer100: Math.round(protein * factor * 10) / 10,
-    carbsPer100: Math.round(carbs * factor * 10) / 10,
-    fatPer100: Math.round(fat * factor * 10) / 10
+    unit,
+    calories: Math.round(calories * factor),
+    protein: Math.round(protein * factor * 10) / 10,
+    carbs: Math.round(carbs * factor * 10) / 10,
+    fat: Math.round(fat * factor * 10) / 10
   });
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(foodBank)); } catch (err) {}
 }
@@ -405,7 +422,8 @@ async function addItem() {
   const nameEn = document.getElementById('foodNameEn').value.trim();
   const nameDe = document.getElementById('foodNameDe').value.trim();
   if (!nameEn && !nameDe) { alert('Enter a food name.'); return; }
-  const grams = parseFloat(document.getElementById('foodGrams').value) || 0;
+  const unit = document.getElementById('foodUnit').value;
+  const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
   const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
   const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
   const carbs = parseFloat(document.getElementById('foodCarbs').value) || 0;
@@ -413,8 +431,8 @@ async function addItem() {
   const ds = selectedDate();
   if (!entries[activePerson]) entries[activePerson] = {};
   if (!entries[activePerson][ds]) entries[activePerson][ds] = { items: [] };
-  entries[activePerson][ds].items.push({ name: nameEn || nameDe, nameEn, nameDe, grams, calories, protein, carbs, fat });
-  saveToBankIfNew(nameEn, nameDe, grams, calories, protein, carbs, fat);
+  entries[activePerson][ds].items.push({ name: nameEn || nameDe, nameEn, nameDe, unit, grams: amount, calories, protein, carbs, fat });
+  saveToBankIfNew(nameEn, nameDe, unit, amount, calories, protein, carbs, fat);
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   clearManualFields();
   renderLogCard();
@@ -439,7 +457,7 @@ function renderLogCard() {
   listEl.innerHTML = items.length === 0
     ? '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>'
     : items.map((it, i) => `<div class="food-item">
-        <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + 'g)</span>' : ''}</span>
+        <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
         <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g protein</span>
         <button class="fi-del" data-i="${i}">&times;</button>
       </div>`).join('');
@@ -537,7 +555,8 @@ async function loadData() {
 
 document.getElementById('foodNameEn').addEventListener('input', onFoodNameInput);
 document.getElementById('foodNameDe').addEventListener('input', onFoodNameInput);
-document.getElementById('foodGrams').addEventListener('input', onGramsInput);
+document.getElementById('foodGrams').addEventListener('input', onAmountOrUnitInput);
+document.getElementById('foodUnit').addEventListener('change', onAmountOrUnitInput);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
 document.getElementById('addItemBtn').addEventListener('click', addItem);
 document.getElementById('datePicker').addEventListener('change', renderLogCard);
