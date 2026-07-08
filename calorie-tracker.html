@@ -67,6 +67,7 @@
   .food-item:last-child { border-bottom:none; }
   .food-item .fi-name { flex:1; min-width:0; }
   .food-item .fi-macros { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+  .food-item .fi-edit { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:13px; cursor:pointer; padding:2px 6px; }
   .food-item .fi-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
   .totals-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border-strong); }
   .totals-row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; }
@@ -150,6 +151,7 @@
     </div>
     <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Not in our bank? Search on Google &rarr;</button>
     <button class="primary" id="addItemBtn">Add to log</button>
+    <button type="button" class="link-btn" id="cancelEditBtn" style="display:none; width:100%; text-align:center;">Cancel edit</button>
 
     <div id="foodItemsList"></div>
     <div class="totals-line" id="totalsLine"></div>
@@ -342,6 +344,7 @@ function dayTotals(person, dateStr) {
 let activeBankEntry = null;
 let currentMatches = [];
 let dropdownIndex = -1;
+let editingIndex = -1;
 
 function clearManualFields() {
   document.getElementById('foodSearchInput').value = '';
@@ -350,6 +353,9 @@ function clearManualFields() {
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
   activeBankEntry = null;
+  editingIndex = -1;
+  document.getElementById('addItemBtn').textContent = 'Add to log';
+  document.getElementById('cancelEditBtn').style.display = 'none';
   applyUnit('gram');
   document.getElementById('bankStatus').textContent = '';
   closeDropdown();
@@ -544,7 +550,13 @@ async function addItem() {
   const ds = selectedDate();
   if (!entries[activePerson]) entries[activePerson] = {};
   if (!entries[activePerson][ds]) entries[activePerson][ds] = { items: [] };
-  entries[activePerson][ds].items.push({ name: nameEn, unit, grams: amount, calories, protein, carbs, fat });
+  const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat };
+  const items = entries[activePerson][ds].items;
+  if (editingIndex >= 0 && items[editingIndex]) {
+    items[editingIndex] = newItem;
+  } else {
+    items.push(newItem);
+  }
   saveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat);
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   clearManualFields();
@@ -557,10 +569,32 @@ function deleteItem(index) {
   const ds = selectedDate();
   const items = dayItems(activePerson, ds);
   items.splice(index, 1);
+  if (editingIndex === index) clearManualFields();
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   renderLogCard();
   renderMonth();
   pushToCloud();
+}
+
+function editItem(index) {
+  const ds = selectedDate();
+  const item = dayItems(activePerson, ds)[index];
+  if (!item) return;
+  const bankEntry = findInBank(item.name);
+  activeBankEntry = bankEntry;
+  document.getElementById('foodSearchInput').value = bankEntry ? (bankEntry.en + ' / ' + bankEntry.de) : item.name;
+  document.getElementById('foodUnit').value = item.unit;
+  updateAmountLabel();
+  document.getElementById('foodGrams').value = item.grams;
+  document.getElementById('foodCalories').value = item.calories;
+  document.getElementById('foodProtein').value = item.protein;
+  document.getElementById('foodCarbs').value = item.carbs;
+  document.getElementById('foodFat').value = item.fat;
+  editingIndex = index;
+  document.getElementById('addItemBtn').textContent = 'Update log entry';
+  document.getElementById('cancelEditBtn').style.display = 'block';
+  document.getElementById('bankStatus').textContent = 'Editing this entry — adjust values, then Update (or Cancel).';
+  closeDropdown();
 }
 
 function renderLogCard() {
@@ -571,9 +605,13 @@ function renderLogCard() {
     ? '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>'
     : items.map((it, i) => `<div class="food-item">
         <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
-        <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g protein</span>
+        <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g P · ${Math.round(it.carbs)}g C · ${Math.round(it.fat)}g F</span>
+        <button class="fi-edit" data-i="${i}">&#9998;</button>
         <button class="fi-del" data-i="${i}">&times;</button>
       </div>`).join('');
+  listEl.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => editItem(parseInt(btn.dataset.i)));
+  });
   listEl.querySelectorAll('.fi-del').forEach(btn => {
     btn.addEventListener('click', () => deleteItem(parseInt(btn.dataset.i)));
   });
@@ -585,6 +623,8 @@ function renderLogCard() {
   document.getElementById('totalsLine').innerHTML = `
     <div class="totals-row"><span class="tname">Calories</span><span><span class="count">${Math.round(totals.calories)}/${goal.calories}</span><span class="status ${calMet?'met':'missed'}">${calMet?'On track':'Over'}</span></span></div>
     <div class="totals-row"><span class="tname">Protein</span><span><span class="count">${Math.round(totals.protein)}/${goal.protein}g</span><span class="status ${protMet?'met':'missed'}">${protMet?'Met':'Under'}</span></span></div>
+    <div class="totals-row"><span class="tname">Carbs</span><span><span class="count">${Math.round(totals.carbs)}g</span></span></div>
+    <div class="totals-row"><span class="tname">Fat</span><span><span class="count">${Math.round(totals.fat)}g</span></span></div>
   `;
 }
 
@@ -672,6 +712,7 @@ document.getElementById('foodGrams').addEventListener('input', onGramsFieldInput
 document.getElementById('foodUnit').addEventListener('change', onUnitChange);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
 document.getElementById('addItemBtn').addEventListener('click', addItem);
+document.getElementById('cancelEditBtn').addEventListener('click', clearManualFields);
 document.getElementById('datePicker').addEventListener('change', renderLogCard);
 
 ['p1Name','p2Name','p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal'].forEach(id => {
