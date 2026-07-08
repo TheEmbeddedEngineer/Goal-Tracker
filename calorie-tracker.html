@@ -134,7 +134,7 @@
 
     <div style="position:relative; margin-bottom:8px;">
       <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Food name (English or Deutsch)</label>
-      <input type="text" id="foodName" autocomplete="off" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+      <input type="text" id="foodSearchInput" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
       <div id="foodNameDropdown" class="autocomplete-dropdown"></div>
     </div>
     <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
@@ -340,9 +340,11 @@ function dayTotals(person, dateStr) {
 }
 
 let activeBankEntry = null;
+let currentMatches = [];
+let dropdownIndex = -1;
 
 function clearManualFields() {
-  document.getElementById('foodName').value = '';
+  document.getElementById('foodSearchInput').value = '';
   document.getElementById('foodCalories').value = '';
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
@@ -388,6 +390,16 @@ function closeDropdown() {
   const dd = document.getElementById('foodNameDropdown');
   dd.classList.remove('open');
   dd.innerHTML = '';
+  currentMatches = [];
+  dropdownIndex = -1;
+}
+
+function updateDropdownHighlight() {
+  const dd = document.getElementById('foodNameDropdown');
+  dd.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+    el.classList.toggle('active', i === dropdownIndex);
+    if (i === dropdownIndex) el.scrollIntoView({ block: 'nearest' });
+  });
 }
 
 // entry.gram / entry.piece hold {calories,protein,carbs,fat} reference values
@@ -408,7 +420,7 @@ function fillFromBankEntry(entry, unit, amount) {
 }
 
 function selectBankEntry(entry) {
-  document.getElementById('foodName').value = entry.en + ' / ' + entry.de;
+  document.getElementById('foodSearchInput').value = entry.en + ' / ' + entry.de;
   activeBankEntry = entry;
   const amount = applyUnit(entry.preferredUnit);
   fillFromBankEntry(entry, entry.preferredUnit, amount);
@@ -416,17 +428,42 @@ function selectBankEntry(entry) {
 }
 
 function renderDropdown(matches) {
+  currentMatches = matches;
+  dropdownIndex = -1;
   const dd = document.getElementById('foodNameDropdown');
   if (matches.length === 0) { closeDropdown(); return; }
   dd.innerHTML = matches.map((f, i) => `<div class="autocomplete-item" data-i="${i}">${f.en} <span class="ai-sub">/ ${f.de}</span></div>`).join('');
   dd.classList.add('open');
   dd.querySelectorAll('.autocomplete-item').forEach(el => {
-    el.addEventListener('mousedown', (e) => { e.preventDefault(); selectBankEntry(matches[parseInt(el.dataset.i)]); });
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); selectBankEntry(currentMatches[parseInt(el.dataset.i)]); });
   });
 }
 
+function onFoodSearchKeydown(e) {
+  const dd = document.getElementById('foodNameDropdown');
+  const isOpen = dd.classList.contains('open');
+  if (e.key === 'ArrowDown') {
+    if (!isOpen || currentMatches.length === 0) return;
+    e.preventDefault();
+    dropdownIndex = Math.min(dropdownIndex + 1, currentMatches.length - 1);
+    updateDropdownHighlight();
+  } else if (e.key === 'ArrowUp') {
+    if (!isOpen || currentMatches.length === 0) return;
+    e.preventDefault();
+    dropdownIndex = Math.max(dropdownIndex - 1, 0);
+    updateDropdownHighlight();
+  } else if (e.key === 'Enter') {
+    if (isOpen && dropdownIndex >= 0 && currentMatches[dropdownIndex]) {
+      e.preventDefault();
+      selectBankEntry(currentMatches[dropdownIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    closeDropdown();
+  }
+}
+
 function onFoodNameInput() {
-  const name = document.getElementById('foodName').value;
+  const name = document.getElementById('foodSearchInput').value;
   activeBankEntry = null;
   const exact = findInBank(name);
   const statusEl = document.getElementById('bankStatus');
@@ -458,11 +495,11 @@ function onUnitChange() {
 }
 
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('#foodName') && !e.target.closest('#foodNameDropdown')) closeDropdown();
+  if (!e.target.closest('#foodSearchInput') && !e.target.closest('#foodNameDropdown')) closeDropdown();
 });
 
 function searchOnGoogle() {
-  const name = document.getElementById('foodName').value.trim().split('/')[0].trim();
+  const name = document.getElementById('foodSearchInput').value.trim().split('/')[0].trim();
   if (!name) { alert('Enter a food name first.'); return; }
   const amount = document.getElementById('foodGrams').value || '100';
   const unit = document.getElementById('foodUnit').value;
@@ -495,7 +532,7 @@ function saveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat) {
 }
 
 async function addItem() {
-  const name = document.getElementById('foodName').value.trim();
+  const name = document.getElementById('foodSearchInput').value.trim();
   if (!name) { alert('Enter a food name.'); return; }
   const nameEn = name.split('/')[0].trim();
   const unit = document.getElementById('foodUnit').value;
@@ -629,7 +666,8 @@ async function loadData() {
   subscribeToCloud(coupleCode);
 }
 
-document.getElementById('foodName').addEventListener('input', onFoodNameInput);
+document.getElementById('foodSearchInput').addEventListener('input', onFoodNameInput);
+document.getElementById('foodSearchInput').addEventListener('keydown', onFoodSearchKeydown);
 document.getElementById('foodGrams').addEventListener('input', onGramsFieldInput);
 document.getElementById('foodUnit').addEventListener('change', onUnitChange);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
