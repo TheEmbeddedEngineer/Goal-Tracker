@@ -19,6 +19,8 @@
     --accent-text: #ffffff;
     --p1: #3d6da8;
     --p2: #a8467a;
+    --up: #2f8f46;
+    --down: #c0392b;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -26,6 +28,7 @@
       --text: #f1efe8; --text-secondary: #b4b0a3; --text-muted: #858173;
       --accent: #7fb0e8; --accent-text: #1c1a17;
       --p1: #7fb0e8; --p2: #e090bb;
+      --up: #6fcf87; --down: #f28b82;
     }
   }
   * { box-sizing: border-box; }
@@ -74,11 +77,25 @@
   .log-weight-row input { width:90px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:10px; }
   button.primary:active { transform:scale(0.98); }
-  .past-log-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; cursor:pointer; }
-  .past-log-row:last-child { border-bottom:none; }
-  .past-log-row .pl-date { flex-shrink:0; font-weight:600; width:88px; }
-  .past-log-row .pl-summary { flex:1; min-width:0; color:var(--text-secondary); font-size:12px; }
-  .past-log-row .pl-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
+  .past-log-row { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; background:var(--bg); }
+  .past-log-row:last-child { margin-bottom:0; }
+  .pl-header { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; font-size:13px; }
+  .pl-header .pl-date { flex-shrink:0; font-weight:600; width:80px; }
+  .pl-header .pl-meta { flex:1; min-width:0; color:var(--text-secondary); font-size:12px; }
+  .pl-chevron { flex-shrink:0; color:var(--text-muted); font-size:10px; display:inline-block; transition:transform .15s ease; }
+  .pl-chevron.open { transform:rotate(90deg); }
+  .pl-edit, .pl-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:14px; cursor:pointer; padding:3px 6px; line-height:1; }
+  .pl-edit:hover, .pl-del:hover { color:var(--text); }
+  .pl-detail { display:none; padding:2px 10px 8px; border-top:1px solid var(--border); }
+  .pl-detail.open { display:block; }
+  .pl-ex-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:12px; }
+  .pl-ex-row + .pl-ex-row { border-top:1px solid var(--border); }
+  .pl-ex-name { flex:1; min-width:0; color:var(--text-secondary); }
+  .pl-ex-weight { flex-shrink:0; font-weight:600; width:52px; text-align:right; }
+  .pl-ex-delta { flex-shrink:0; font-size:11px; width:64px; text-align:right; }
+  .pl-ex-delta.up { color:var(--up); }
+  .pl-ex-delta.down { color:var(--down); }
+  .pl-ex-delta.flat { color:var(--text-muted); }
 </style>
 </head>
 <body>
@@ -434,6 +451,29 @@ function findLog(person, dayKey, date, variant) {
   return (trainingLog[person] || []).find(l => l.day === dayKey && l.date === date && l.variant === variant);
 }
 
+function findPreviousLog(person, dayKey, variant, beforeDate) {
+  const arr = (trainingLog[person] || [])
+    .filter(l => l.day === dayKey && l.variant === variant && l.date < beforeDate)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return arr[0] || null;
+}
+
+const expandedLogs = new Set();
+function logKey(date, variant) { return date + '|' + variant; }
+
+function renderLogDetail(l, prev) {
+  return Object.entries(l.weights).map(([name, w]) => {
+    let deltaHtml = '<span class="pl-ex-delta flat">first time</span>';
+    if (prev && prev.weights[name] !== undefined) {
+      const d = Math.round((w - prev.weights[name]) * 100) / 100;
+      if (d > 0) deltaHtml = `<span class="pl-ex-delta up">&#9650; +${d}kg</span>`;
+      else if (d < 0) deltaHtml = `<span class="pl-ex-delta down">&#9660; ${d}kg</span>`;
+      else deltaHtml = '<span class="pl-ex-delta flat">no change</span>';
+    }
+    return `<div class="pl-ex-row"><span class="pl-ex-name">${name}</span><span class="pl-ex-weight">${w}kg</span>${deltaHtml}</div>`;
+  }).join('');
+}
+
 function renderDay(day, dayKey) {
   const hasVariants = !!(day.gym && day.home);
   const list = hasVariants ? (activeVariant === 'gym' ? day.gym : day.home) : day.gym;
@@ -462,11 +502,19 @@ function renderDay(day, dayKey) {
     <div class="section-title" style="margin-top:20px;">Past sessions</div>
     <div id="pastLogs">
       ${logs.length === 0 ? '<div class="empty-state" style="padding:1rem 0;">No sessions logged yet.</div>' : logs.map(l => {
-        const summary = Object.entries(l.weights).map(([n, w]) => n + ' ' + w + 'kg').join(' · ');
+        const key = logKey(l.date, l.variant);
+        const open = expandedLogs.has(key);
+        const prev = findPreviousLog(activePerson, dayKey, l.variant, l.date);
+        const count = Object.keys(l.weights).length;
         return `<div class="past-log-row" data-date="${l.date}" data-variant="${l.variant}">
-          <span class="pl-date">${l.date}</span>
-          <span class="pl-summary">${l.variant === 'home' ? 'Home' : 'Gym'} · ${summary}</span>
-          <button class="pl-del" data-date="${l.date}" data-variant="${l.variant}">&times;</button>
+          <div class="pl-header">
+            <span class="pl-chevron ${open ? 'open' : ''}">&#9656;</span>
+            <span class="pl-date">${l.date}</span>
+            <span class="pl-meta">${l.variant === 'home' ? 'Home' : 'Gym'} &middot; ${count} exercise${count === 1 ? '' : 's'}</span>
+            <button class="pl-edit" data-date="${l.date}" data-variant="${l.variant}" title="Load into form">&#9998;</button>
+            <button class="pl-del" data-date="${l.date}" data-variant="${l.variant}" title="Delete">&times;</button>
+          </div>
+          <div class="pl-detail ${open ? 'open' : ''}">${renderLogDetail(l, prev)}</div>
         </div>`;
       }).join('')}
     </div>
@@ -565,10 +613,11 @@ function renderContent() {
         deleteLog(activeDay, btn.dataset.date, btn.dataset.variant);
       });
     });
-    document.querySelectorAll('.past-log-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const date = row.dataset.date;
-        const variant = row.dataset.variant;
+    document.querySelectorAll('.pl-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const date = btn.dataset.date;
+        const variant = btn.dataset.variant;
         if (variant !== activeVariant) {
           activeVariant = variant;
           pendingViewLog = { date };
@@ -577,6 +626,14 @@ function renderContent() {
           document.getElementById('logDate').value = date;
           loadLogIntoForm(activeDay, list, activeVariant);
         }
+      });
+    });
+    document.querySelectorAll('.pl-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const row = header.closest('.past-log-row');
+        const key = logKey(row.dataset.date, row.dataset.variant);
+        if (expandedLogs.has(key)) expandedLogs.delete(key); else expandedLogs.add(key);
+        renderContent();
       });
     });
   }
