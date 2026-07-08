@@ -235,11 +235,12 @@ function subscribeToCloud(code) {
   });
 }
 
-async function pushToCloud() {
+async function pushToCloud(opts = {}) {
   if (!coupleCode || applyingRemoteUpdate) return;
   try {
     await ensureAuth();
-    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings, weeklyThresholds });
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings, weeklyThresholds }, writeOpts);
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error: could not save');
@@ -536,7 +537,7 @@ document.getElementById('resetBtn').addEventListener('click', async () => {
   try { localStorage.removeItem('weeklyThresholds'); } catch (err) {}
   loadCheckboxesForDate();
   renderAll();
-  pushToCloud();
+  pushToCloud({ replace: true });
 });
 
 loadData();
