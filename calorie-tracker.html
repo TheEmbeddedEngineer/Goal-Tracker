@@ -139,7 +139,7 @@
     </div>
     <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
       <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
-      <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Piece / serving (e.g. 1 egg, 1 tbsp)</option></select></div>
+      <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Piece / serving</option></select></div>
     </div>
     <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
     <div class="manual-grid macros">
@@ -347,9 +347,8 @@ function clearManualFields() {
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
-  document.getElementById('foodUnit').value = 'gram';
   activeBankEntry = null;
-  updateAmountLabel();
+  applyUnit('gram');
   document.getElementById('bankStatus').textContent = '';
   closeDropdown();
 }
@@ -374,6 +373,15 @@ function searchBank(query) {
 function updateAmountLabel() {
   const unit = document.getElementById('foodUnit').value;
   document.getElementById('foodAmountLabel').textContent = unit === 'piece' ? 'Quantity (pieces/servings)' : 'Grams';
+}
+
+// Sets the unit select + resets the amount field to a sensible default for that unit (1 piece / 100g).
+function applyUnit(unit) {
+  document.getElementById('foodUnit').value = unit;
+  const amount = unit === 'piece' ? 1 : 100;
+  document.getElementById('foodGrams').value = amount;
+  updateAmountLabel();
+  return amount;
 }
 
 function closeDropdown() {
@@ -402,9 +410,7 @@ function fillFromBankEntry(entry, unit, amount) {
 function selectBankEntry(entry) {
   document.getElementById('foodName').value = entry.en + ' / ' + entry.de;
   activeBankEntry = entry;
-  document.getElementById('foodUnit').value = entry.preferredUnit;
-  updateAmountLabel();
-  const amount = parseFloat(document.getElementById('foodGrams').value) || (entry.preferredUnit === 'piece' ? 1 : 100);
+  const amount = applyUnit(entry.preferredUnit);
   fillFromBankEntry(entry, entry.preferredUnit, amount);
   closeDropdown();
 }
@@ -426,9 +432,7 @@ function onFoodNameInput() {
   const statusEl = document.getElementById('bankStatus');
   if (exact) {
     activeBankEntry = exact;
-    document.getElementById('foodUnit').value = exact.preferredUnit;
-    updateAmountLabel();
-    const amount = parseFloat(document.getElementById('foodGrams').value) || (exact.preferredUnit === 'piece' ? 1 : 100);
+    const amount = applyUnit(exact.preferredUnit);
     fillFromBankEntry(exact, exact.preferredUnit, amount);
     closeDropdown();
   } else {
@@ -437,13 +441,20 @@ function onFoodNameInput() {
   }
 }
 
-function onAmountOrUnitInput() {
-  updateAmountLabel();
+// User is typing a custom amount — recompute macros but leave their typed number alone.
+function onGramsFieldInput() {
   if (activeBankEntry) {
     const unit = document.getElementById('foodUnit').value;
     const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
     fillFromBankEntry(activeBankEntry, unit, amount);
   }
+}
+
+// User manually flipped the unit dropdown — reset the amount to a sensible default for that unit.
+function onUnitChange() {
+  const unit = document.getElementById('foodUnit').value;
+  const amount = applyUnit(unit);
+  if (activeBankEntry) fillFromBankEntry(activeBankEntry, unit, amount);
 }
 
 document.addEventListener('click', (e) => {
@@ -619,8 +630,8 @@ async function loadData() {
 }
 
 document.getElementById('foodName').addEventListener('input', onFoodNameInput);
-document.getElementById('foodGrams').addEventListener('input', onAmountOrUnitInput);
-document.getElementById('foodUnit').addEventListener('change', onAmountOrUnitInput);
+document.getElementById('foodGrams').addEventListener('input', onGramsFieldInput);
+document.getElementById('foodUnit').addEventListener('change', onUnitChange);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
 document.getElementById('addItemBtn').addEventListener('click', addItem);
 document.getElementById('datePicker').addEventListener('change', renderLogCard);
