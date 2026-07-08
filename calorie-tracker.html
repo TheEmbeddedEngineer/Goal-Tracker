@@ -53,6 +53,12 @@
   .date-picker-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
   .manual-grid { display:grid; grid-template-columns: 1.5fr 1.5fr 1fr; gap:8px; margin-bottom:8px; }
   .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .autocomplete-dropdown { display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--border-strong); border-radius:8px; margin-top:4px; max-height:220px; overflow-y:auto; z-index:10; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+  .autocomplete-dropdown.open { display:block; }
+  .autocomplete-item { padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); }
+  .autocomplete-item:last-child { border-bottom:none; }
+  .autocomplete-item:hover, .autocomplete-item.active { background:var(--bg); }
+  .autocomplete-item .ai-sub { font-size:11px; color:var(--text-muted); }
   .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
   .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
@@ -126,13 +132,14 @@
       <input type="date" id="datePicker">
     </div>
 
-    <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
-      <div><label>Food name (English)</label><input type="text" id="foodNameEn"></div>
-      <div><label>Food name (German)</label><input type="text" id="foodNameDe"></div>
+    <div style="position:relative; margin-bottom:8px;">
+      <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Food name (English or Deutsch)</label>
+      <input type="text" id="foodName" autocomplete="off" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+      <div id="foodNameDropdown" class="autocomplete-dropdown"></div>
     </div>
     <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
       <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
-      <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Pieces (e.g. 1 egg, 1 fruit)</option></select></div>
+      <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Piece / serving (e.g. 1 egg, 1 tbsp)</option></select></div>
     </div>
     <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
     <div class="manual-grid macros">
@@ -332,69 +339,119 @@ function dayTotals(person, dateStr) {
   }), { calories:0, protein:0, carbs:0, fat:0 });
 }
 
+let activeBankEntry = null;
+
 function clearManualFields() {
-  document.getElementById('foodNameEn').value = '';
-  document.getElementById('foodNameDe').value = '';
+  document.getElementById('foodName').value = '';
   document.getElementById('foodCalories').value = '';
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
   document.getElementById('foodUnit').value = 'gram';
+  activeBankEntry = null;
   updateAmountLabel();
   document.getElementById('bankStatus').textContent = '';
+  closeDropdown();
 }
 
 function normName(s) { return (s || '').trim().toLowerCase(); }
 
+// A typed name may be "English", "Deutsch", or "English / Deutsch" (as inserted when picking a dropdown suggestion).
+function nameParts(name) { return (name || '').split('/').map(s => normName(s)).filter(Boolean); }
+
 function findInBank(name) {
-  const n = normName(name);
-  if (!n) return null;
-  return foodBank.find(f => normName(f.en) === n || normName(f.de) === n) || null;
+  const parts = nameParts(name);
+  if (parts.length === 0) return null;
+  return foodBank.find(f => parts.includes(normName(f.en)) || parts.includes(normName(f.de))) || null;
+}
+
+function searchBank(query) {
+  const n = normName(query);
+  if (!n) return [];
+  return foodBank.filter(f => normName(f.en).includes(n) || normName(f.de).includes(n)).slice(0, 8);
 }
 
 function updateAmountLabel() {
   const unit = document.getElementById('foodUnit').value;
-  document.getElementById('foodAmountLabel').textContent = unit === 'piece' ? 'Quantity (pieces)' : 'Grams';
+  document.getElementById('foodAmountLabel').textContent = unit === 'piece' ? 'Quantity (pieces/servings)' : 'Grams';
 }
 
-// entry.calories/protein/carbs/fat are the reference values for entry.unit:
-// 100g if unit === 'gram', or 1 piece if unit === 'piece'.
-function fillFromBankEntry(entry, amount) {
-  const factor = entry.unit === 'piece' ? (amount || 0) : (amount || 0) / 100;
-  document.getElementById('foodCalories').value = Math.round(entry.calories * factor);
-  document.getElementById('foodProtein').value = Math.round(entry.protein * factor * 10) / 10;
-  document.getElementById('foodCarbs').value = Math.round(entry.carbs * factor * 10) / 10;
-  document.getElementById('foodFat').value = Math.round(entry.fat * factor * 10) / 10;
+function closeDropdown() {
+  const dd = document.getElementById('foodNameDropdown');
+  dd.classList.remove('open');
+  dd.innerHTML = '';
+}
+
+// entry.gram / entry.piece hold {calories,protein,carbs,fat} reference values
+// for 100g or 1 piece respectively. Either may be missing.
+function fillFromBankEntry(entry, unit, amount) {
+  const ref = entry[unit];
+  const statusEl = document.getElementById('bankStatus');
+  if (!ref) {
+    statusEl.textContent = '"' + entry.en + ' / ' + entry.de + '" has no ' + (unit === 'piece' ? 'per-piece' : 'per-gram') + ' data yet — enter values manually and it’ll be saved for next time.';
+    return;
+  }
+  const factor = unit === 'piece' ? (amount || 0) : (amount || 0) / 100;
+  document.getElementById('foodCalories').value = Math.round(ref.calories * factor);
+  document.getElementById('foodProtein').value = Math.round(ref.protein * factor * 10) / 10;
+  document.getElementById('foodCarbs').value = Math.round(ref.carbs * factor * 10) / 10;
+  document.getElementById('foodFat').value = Math.round(ref.fat * factor * 10) / 10;
+  statusEl.textContent = '✓ Using "' + entry.en + ' / ' + entry.de + '" — auto-filled for ' + amount + (unit === 'piece' ? ' piece(s).' : 'g.');
+}
+
+function selectBankEntry(entry) {
+  document.getElementById('foodName').value = entry.en + ' / ' + entry.de;
+  activeBankEntry = entry;
+  document.getElementById('foodUnit').value = entry.preferredUnit;
+  updateAmountLabel();
+  const amount = parseFloat(document.getElementById('foodGrams').value) || (entry.preferredUnit === 'piece' ? 1 : 100);
+  fillFromBankEntry(entry, entry.preferredUnit, amount);
+  closeDropdown();
+}
+
+function renderDropdown(matches) {
+  const dd = document.getElementById('foodNameDropdown');
+  if (matches.length === 0) { closeDropdown(); return; }
+  dd.innerHTML = matches.map((f, i) => `<div class="autocomplete-item" data-i="${i}">${f.en} <span class="ai-sub">/ ${f.de}</span></div>`).join('');
+  dd.classList.add('open');
+  dd.querySelectorAll('.autocomplete-item').forEach(el => {
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); selectBankEntry(matches[parseInt(el.dataset.i)]); });
+  });
 }
 
 function onFoodNameInput() {
-  const nameEn = document.getElementById('foodNameEn').value;
-  const nameDe = document.getElementById('foodNameDe').value;
-  const match = findInBank(nameEn) || findInBank(nameDe);
+  const name = document.getElementById('foodName').value;
+  activeBankEntry = null;
+  const exact = findInBank(name);
   const statusEl = document.getElementById('bankStatus');
-  if (match) {
-    document.getElementById('foodUnit').value = match.unit;
+  if (exact) {
+    activeBankEntry = exact;
+    document.getElementById('foodUnit').value = exact.preferredUnit;
     updateAmountLabel();
-    const amount = parseFloat(document.getElementById('foodGrams').value) || (match.unit === 'piece' ? 1 : 100);
-    if (!document.getElementById('foodNameEn').value.trim()) document.getElementById('foodNameEn').value = match.en;
-    if (!document.getElementById('foodNameDe').value.trim()) document.getElementById('foodNameDe').value = match.de;
-    fillFromBankEntry(match, amount);
-    statusEl.textContent = '✓ Found in your food bank — macros auto-filled for ' + amount + (match.unit === 'piece' ? ' piece(s).' : 'g.');
+    const amount = parseFloat(document.getElementById('foodGrams').value) || (exact.preferredUnit === 'piece' ? 1 : 100);
+    fillFromBankEntry(exact, exact.preferredUnit, amount);
+    closeDropdown();
   } else {
-    statusEl.textContent = nameEn.trim() || nameDe.trim() ? 'Not in your food bank yet — enter values manually or search Google, and it’ll be saved for next time.' : '';
+    statusEl.textContent = name.trim() ? 'Not in your food bank yet — enter values manually or search Google, and it’ll be saved for next time.' : '';
+    renderDropdown(searchBank(name));
   }
 }
 
 function onAmountOrUnitInput() {
   updateAmountLabel();
-  const nameEn = document.getElementById('foodNameEn').value;
-  const nameDe = document.getElementById('foodNameDe').value;
-  const match = findInBank(nameEn) || findInBank(nameDe);
-  if (match) fillFromBankEntry(match, parseFloat(document.getElementById('foodGrams').value) || 0);
+  if (activeBankEntry) {
+    const unit = document.getElementById('foodUnit').value;
+    const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
+    fillFromBankEntry(activeBankEntry, unit, amount);
+  }
 }
 
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#foodName') && !e.target.closest('#foodNameDropdown')) closeDropdown();
+});
+
 function searchOnGoogle() {
-  const name = (document.getElementById('foodNameEn').value || document.getElementById('foodNameDe').value).trim();
+  const name = document.getElementById('foodName').value.trim().split('/')[0].trim();
   if (!name) { alert('Enter a food name first.'); return; }
   const amount = document.getElementById('foodGrams').value || '100';
   const unit = document.getElementById('foodUnit').value;
@@ -402,26 +459,34 @@ function searchOnGoogle() {
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
-function saveToBankIfNew(nameEn, nameDe, unit, amount, calories, protein, carbs, fat) {
-  if (findInBank(nameEn) || findInBank(nameDe)) return;
+function saveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat) {
   if (!amount || amount <= 0) return;
   const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
-  foodBank.push({
-    en: nameEn || nameDe,
-    de: nameDe || nameEn,
-    unit,
+  const refData = {
     calories: Math.round(calories * factor),
     protein: Math.round(protein * factor * 10) / 10,
     carbs: Math.round(carbs * factor * 10) / 10,
     fat: Math.round(fat * factor * 10) / 10
-  });
+  };
+  let entry = findInBank(name);
+  if (entry) {
+    entry[unit] = refData;
+    entry.preferredUnit = unit;
+  } else {
+    const parts = name.split('/').map(s => s.trim()).filter(Boolean);
+    const en = parts[0] || name;
+    const de = parts[1] || parts[0] || name;
+    entry = { en, de, preferredUnit: unit, gram: null, piece: null };
+    entry[unit] = refData;
+    foodBank.push(entry);
+  }
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(foodBank)); } catch (err) {}
 }
 
 async function addItem() {
-  const nameEn = document.getElementById('foodNameEn').value.trim();
-  const nameDe = document.getElementById('foodNameDe').value.trim();
-  if (!nameEn && !nameDe) { alert('Enter a food name.'); return; }
+  const name = document.getElementById('foodName').value.trim();
+  if (!name) { alert('Enter a food name.'); return; }
+  const nameEn = name.split('/')[0].trim();
   const unit = document.getElementById('foodUnit').value;
   const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
   const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
@@ -431,8 +496,8 @@ async function addItem() {
   const ds = selectedDate();
   if (!entries[activePerson]) entries[activePerson] = {};
   if (!entries[activePerson][ds]) entries[activePerson][ds] = { items: [] };
-  entries[activePerson][ds].items.push({ name: nameEn || nameDe, nameEn, nameDe, unit, grams: amount, calories, protein, carbs, fat });
-  saveToBankIfNew(nameEn, nameDe, unit, amount, calories, protein, carbs, fat);
+  entries[activePerson][ds].items.push({ name: nameEn, unit, grams: amount, calories, protein, carbs, fat });
+  saveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat);
   try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
   clearManualFields();
   renderLogCard();
@@ -553,8 +618,7 @@ async function loadData() {
   subscribeToCloud(coupleCode);
 }
 
-document.getElementById('foodNameEn').addEventListener('input', onFoodNameInput);
-document.getElementById('foodNameDe').addEventListener('input', onFoodNameInput);
+document.getElementById('foodName').addEventListener('input', onFoodNameInput);
 document.getElementById('foodGrams').addEventListener('input', onAmountOrUnitInput);
 document.getElementById('foodUnit').addEventListener('change', onAmountOrUnitInput);
 document.getElementById('googleSearchBtn').addEventListener('click', searchOnGoogle);
