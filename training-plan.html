@@ -144,6 +144,7 @@ const DAY_ORDER = ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare
 const DAY_LABELS = { overview: 'Overview', day1: 'Day 1', day2: 'Day 2', day3: 'Day 3', day4: 'Day 4', day5: 'Day 5', backcare: 'Back care' };
 
 const PLAN_P1 = {
+  dayOrder: ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'],
   overview: {
     goal: 'Upper-body focus while maintaining lower body, muscle maintenance/build + fat loss, better conditioning, compatible with playing tennis on unpredictable days.',
     rules: [
@@ -300,7 +301,87 @@ const PLAN_P1 = {
   }
 };
 
-const PLAN_P2 = null; // no plan added yet for Partner
+const PLAN_P2 = {
+  dayOrder: ['overview', 'day1', 'day2', 'day3', 'day4'],
+  overview: {
+    goal: 'Build muscle and lean out while directly counteracting desk-job posture (rounded shoulders, weak upper back) — 4 gym sessions (45 min) + 1 separate Hyrox session per week.',
+    rules: [
+      'Rounded shoulders from desk work come from an imbalance: chest/front-shoulder muscles get tight and overused while the upper back and rear delts get weak and stretched out. The fix is tipping the training ratio toward <strong>pulling movements over pushing movements (roughly 2:1)</strong> so the upper back has the strength to actually hold the shoulders back.',
+      '<strong>Every session includes at least one direct posture/upper-back exercise</strong>, not just on a dedicated "back day."',
+      '<strong>Day 5 is Hyrox</strong> — a separate dedicated session. Don\'t add extra volume on top of it; this plan is built around it, not competing with it.',
+      '<strong>Daily posture habit:</strong> a 30-second doorway chest stretch and a few band pull-aparts at the desk, a couple of times a day, does more for rounded shoulders over time than any single gym session.'
+    ],
+    frequency: [
+      ['Upper back / posture', 'Day 1, Day 2, Day 3 (every session)', '4x'],
+      ['Chest', 'Day 3 only', '1x (intentionally low — 2:1 pull:push ratio)'],
+      ['Shoulders', 'Day 1, Day 3', '2x'],
+      ['Glutes / posterior chain', 'Day 1, Day 2, Day 4', '3x'],
+      ['Legs (quads)', 'Day 1, Day 4', '2x'],
+      ['Core', 'Day 1, Day 3, Day 4', '3x']
+    ],
+    notes: [
+      '<strong>Progression:</strong> add a little weight or 1-2 reps per exercise every 1-2 weeks where possible. If you stall for 2 sessions in a row, hold the weight and dial in form before pushing again.',
+      '<strong>Nutrition:</strong> pairs with a target of ~1,700-1,900 kcal/day and ~115g protein — the protein target matters especially here since muscle building needs the raw material to work with.',
+      'This is a different squat and hinge pattern from Day 1 to Day 4 (front/back squat vs. goblet squat, single-leg RDL vs. bilateral RDL) so the legs get real variety instead of repeating the same movement twice a week.'
+    ]
+  },
+  day1: {
+    title: 'Full body strength + upper back',
+    duration: '45 min',
+    gym: [
+      ['Band pull-apart', '2x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
+      ['Wall slides', '2x10', 'https://www.muscleandstrength.com/exercises/scapular-wall-slide'],
+      ['Goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
+      ['Chest-supported dumbbell row', '4x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
+      ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Plank', '3x30-45s', 'https://www.muscleandstrength.com/exercises/hover.html']
+    ]
+  },
+  day2: {
+    title: 'Pull + posterior chain (posture priority day)',
+    duration: '45 min',
+    gym: [
+      ['Band pull-apart', '2x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
+      ['Thoracic rotations', '8/side', 'https://www.youtube.com/watch?v=peeW19ofFUg'],
+      ['Lat pulldown or assisted pull-up', '4x8-10', 'https://www.muscleandstrength.com/exercises/lat-pull-down.html'],
+      ['Single-arm dumbbell row', '3x10-12/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Reverse fly (rear delt)', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Hip thrust', '3x10-12', 'https://www.muscleandstrength.com/exercises/barbell-hip-thrust'],
+      ['Dumbbell bicep curl', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-curl.html']
+    ]
+  },
+  day3: {
+    title: 'Push + core stability',
+    duration: '45 min',
+    gym: [
+      ['Doorway chest stretch', '2x30s', 'https://www.youtube.com/watch?v=M850sCj9LHQ'],
+      ['Wall slides', '2x10', 'https://www.muscleandstrength.com/exercises/scapular-wall-slide'],
+      ['Dumbbell bench press or incline press', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Dumbbell lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Dips (bench or parallel bar)', '3x10-12', 'https://www.muscleandstrength.com/exercises/tricep-dip.html'],
+      ['Side plank', '2x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html']
+    ],
+    footnote: 'Push volume here is intentionally lower than the pull volume across Days 1-2 — that\'s the 2:1 ratio doing its job for posture.'
+  },
+  day4: {
+    title: 'Lower body / hip strength',
+    duration: '45 min',
+    gym: [
+      ['Hip flexor stretch', '2x30s/side', 'https://www.youtube.com/watch?v=Q4Ko275cluo'],
+      ['Glute bridge', '2x10', 'https://www.muscleandstrength.com/exercises/bodyweight-glute-bridge'],
+      ['Front squat or back squat', '4x8-10', 'https://www.muscleandstrength.com/exercises/front-squat.html'],
+      ['Walking lunges', '3x10/leg', 'https://www.muscleandstrength.com/exercises/dumbbell-walking-lunge.html'],
+      ['Single-leg Romanian deadlift', '3x8-10/leg', 'https://www.muscleandstrength.com/exercises/single-leg-one-dumbbell-deadlift'],
+      ['Hip abduction (band or machine)', '3x15/side', 'https://www.muscleandstrength.com/exercises/hip-abduction-machine.html'],
+      ['Standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-calf-raise.html'],
+      ['Side plank', '2x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html']
+    ],
+    footnote: 'Hip abduction targets glute medius, which supports pelvis and hip stability and complements the overall posture focus — it\'s new compared to Day 1\'s leg work rather than a repeat.'
+  }
+};
 
 let activePerson = 'p1';
 let activeDay = 'overview';
@@ -404,13 +485,20 @@ function renderPersonTabs() {
     <button data-p="p2" class="${activePerson === 'p2' ? 'active' : ''}">${settings.p2}</button>
   `;
   el.querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => { activePerson = b.dataset.p; renderAll(); });
+    b.addEventListener('click', () => {
+      activePerson = b.dataset.p;
+      const order = (currentPlan() && currentPlan().dayOrder) || DAY_ORDER;
+      if (!order.includes(activeDay)) activeDay = 'overview';
+      activeVariant = 'gym';
+      renderAll();
+    });
   });
 }
 
 function renderDayTabs() {
   const el = document.getElementById('dayTabs');
-  el.innerHTML = DAY_ORDER.map(d => `<button data-d="${d}" class="${activeDay === d ? 'active' : ''}">${DAY_LABELS[d]}</button>`).join('');
+  const order = (currentPlan() && currentPlan().dayOrder) || DAY_ORDER;
+  el.innerHTML = order.map(d => `<button data-d="${d}" class="${activeDay === d ? 'active' : ''}">${DAY_LABELS[d]}</button>`).join('');
   el.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => { activeDay = b.dataset.d; activeVariant = 'gym'; renderContent(); updateActiveTabStyles(); });
   });
