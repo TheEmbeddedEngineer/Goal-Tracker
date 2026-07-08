@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calorie tracker</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --card: #ffffff;
+    --border: #e2e0d8;
+    --border-strong: #c9c6ba;
+    --text: #22201b;
+    --text-secondary: #6b6858;
+    --text-muted: #9a9787;
+    --green-bg: #e7f2e3; --green-text: #2f5c26; --green-border: #b9d9ae;
+    --amber-bg: #faf1de; --amber-text: #8a5a12; --amber-border: #e9cf9c;
+    --red-bg: #fbe9e7; --red-text: #93362b; --red-border: #eec2bc;
+    --accent: #b5622f;
+    --accent-text: #ffffff;
+    --p1: #3d6da8;
+    --p2: #a8467a;
+    --heat-none: #eceae2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a17; --card: #262420; --border: #3a3730; --border-strong: #4d4a40;
+      --text: #f1efe8; --text-secondary: #b4b0a3; --text-muted: #858173;
+      --green-bg: #1f3420; --green-text: #a8d39b; --green-border: #33512f;
+      --amber-bg: #3a2f1a; --amber-text: #e3bd7c; --amber-border: #5c4a26;
+      --red-bg: #3a2320; --red-text: #f0a89f; --red-border: #5c3630;
+      --accent: #d97757; --accent-text: #1c1a17;
+      --p1: #7fb0e8; --p2: #e090bb;
+      --heat-none: #34322b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:1.5rem 1rem 3rem; }
+  .wrap { max-width: 680px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--text-secondary); font-size:14px; margin:0 0 1.5rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.1rem 1.25rem; margin-bottom:1rem; }
+  .card h2 { font-size:15px; font-weight:600; margin:0 0 12px; }
+  .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .settings-row > div { flex:1; min-width:120px; }
+  .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .settings-row input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .person-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .person-tabs button { flex:1; padding:8px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
+  .person-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .date-picker-row { margin-bottom:14px; }
+  .date-picker-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .date-picker-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .search-row { display:flex; gap:8px; margin-bottom:8px; }
+  .search-row input[type=text] { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .search-row button { padding:8px 14px; border:1px solid var(--border-strong); border-radius:6px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
+  .search-results { margin-bottom:12px; max-height:220px; overflow-y:auto; }
+  .search-result { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:6px; font-size:13px; }
+  .search-result .sr-name { flex:1; min-width:0; }
+  .search-result .sr-macros { font-size:11px; color:var(--text-muted); }
+  .search-result button { flex-shrink:0; padding:5px 10px; border:1px solid var(--accent); border-radius:6px; background:none; color:var(--accent); font-size:12px; cursor:pointer; }
+  .manual-grid { display:grid; grid-template-columns: 2fr 1fr 1fr; gap:8px; margin-bottom:8px; }
+  .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr; }
+  .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
+  .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
+  button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
+  button.primary:active { transform:scale(0.98); }
+  .food-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .food-item:last-child { border-bottom:none; }
+  .food-item .fi-name { flex:1; min-width:0; }
+  .food-item .fi-macros { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+  .food-item .fi-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
+  .totals-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border-strong); }
+  .totals-row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; }
+  .totals-row .tname { color:var(--text-secondary); flex:1; min-width:0; }
+  .totals-row > span:last-child { display:flex; align-items:center; flex-shrink:0; white-space:nowrap; }
+  .status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:100px; white-space:nowrap; }
+  .status.met { background:var(--green-bg); color:var(--green-text); }
+  .status.missed { background:var(--red-bg); color:var(--red-text); }
+  .count { font-size:12px; color:var(--text-muted); margin-right:6px; white-space:nowrap; }
+  .month-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .month-nav button { padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
+  .month-nav h2 { margin:0; }
+  .month-cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  @media (max-width: 480px) {
+    .month-cols { grid-template-columns: 1fr; }
+    .manual-grid, .manual-grid.macros { grid-template-columns: 1fr 1fr; }
+  }
+  .month-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .month-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
+  .month-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:8px; }
+  .month-day { aspect-ratio:1; border-radius:5px; background:var(--heat-none); }
+  .month-day.good { background:var(--green-border); }
+  .month-day.bad { background:var(--red-border); }
+  .month-day.blank { background:none; }
+  .month-legend { display:flex; gap:14px; font-size:11px; color:var(--text-muted); }
+  .month-legend span { display:inline-flex; align-items:center; gap:4px; }
+  .legend-swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .link-btn { background:none; border:none; color:var(--text-muted); font-size:12px; text-decoration:underline; cursor:pointer; padding:4px; }
+  .footer-actions { display:flex; justify-content:flex-end; margin-top:1.5rem; }
+  .sync-status { font-size:12px; color:var(--text-muted); margin:-4px 0 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Calorie tracker</h1>
+  <p class="sub">Log food with grams, search to auto-fill macros, or enter calories/macros yourself.</p>
+
+  <div class="card">
+    <h2>Setup</h2>
+    <div class="settings-row">
+      <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
+      <div><label>Person 2 name</label><input type="text" id="p2Name" value="Partner"></div>
+    </div>
+    <div class="settings-row">
+      <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
+    </div>
+    <p id="syncStatus" class="sync-status"></p>
+    <div class="settings-row">
+      <div><label id="p1CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p1CalGoal" min="0" value="2000"></div>
+      <div><label id="p1ProtLabel">Protein goal (min, g)</label><input type="number" id="p1ProtGoal" min="0" value="120"></div>
+    </div>
+    <div class="settings-row">
+      <div><label id="p2CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p2CalGoal" min="0" value="2000"></div>
+      <div><label id="p2ProtLabel">Protein goal (min, g)</label><input type="number" id="p2ProtGoal" min="0" value="120"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Log food</h2>
+    <div class="person-tabs" id="personTabs"></div>
+    <div class="date-picker-row">
+      <label>Date</label>
+      <input type="date" id="datePicker">
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="foodQuery" placeholder="Search a food, e.g. chicken breast">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+
+    <div class="manual-grid">
+      <div><label>Food name</label><input type="text" id="foodName"></div>
+      <div><label>Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
+      <div><label>Calories</label><input type="number" id="foodCalories" min="0"></div>
+    </div>
+    <div class="manual-grid macros">
+      <div><label>Protein (g)</label><input type="number" id="foodProtein" min="0"></div>
+      <div><label>Carbs (g)</label><input type="number" id="foodCarbs" min="0"></div>
+      <div><label>Fat (g)</label><input type="number" id="foodFat" min="0"></div>
+    </div>
+    <button class="primary" id="addItemBtn">Add to log</button>
+
+    <div id="foodItemsList"></div>
+    <div class="totals-line" id="totalsLine"></div>
+  </div>
+
+  <div class="card">
+    <div class="month-nav">
+      <button id="prevMonthBtn">&larr;</button>
+      <h2 id="monthLabel"></h2>
+      <button id="nextMonthBtn">&rarr;</button>
+    </div>
+    <div class="month-cols" id="monthCols"></div>
+    <div class="month-legend">
+      <span><span class="legend-swatch" style="background:var(--green-border)"></span>Goals met</span>
+      <span><span class="legend-swatch" style="background:var(--red-border)"></span>Goals missed</span>
+      <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
+    </div>
+  </div>
+
+  <div class="footer-actions">
+    <button class="link-btn" id="resetBtn">Clear all data</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBlts7uMhKzrBpGl-yK6hyn6TzP-Yb3zYE",
+  authDomain: "goal-tracker-f1a70.firebaseapp.com",
+  projectId: "goal-tracker-f1a70",
+  storageBucket: "goal-tracker-f1a70.firebasestorage.app",
+  messagingSenderId: "957910892671",
+  appId: "1:957910892671:web:05ce0cd27216d98e30ff4a"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+const FDC_API_KEY = "DEMO_KEY";
+
+let entries = {};
+let settings = {
+  p1: 'You', p2: 'Partner',
+  goals: { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, protein: 120 } }
+};
+let activePerson = 'p1';
+let viewedMonth = null;
+let coupleCode = '';
+let unsubscribeCloud = null;
+let authReadyPromise = null;
+let applyingRemoteUpdate = false;
+let lastPer100 = null;
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
+
+function setSyncStatus(text) {
+  const el = document.getElementById('syncStatus');
+  if (el) el.textContent = text;
+}
+
+function ensureAuth() {
+  if (!authReadyPromise) {
+    authReadyPromise = signInAnonymously(auth).catch(err => {
+      console.error(err);
+      setSyncStatus('Sync error: could not connect');
+    });
+  }
+  return authReadyPromise;
+}
+
+function applyRemoteData(data) {
+  applyingRemoteUpdate = true;
+  entries = data.entries || {};
+  settings = data.settings || settings;
+  populateSettingsInputs();
+  try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
+  try { localStorage.setItem('calorie_settings', JSON.stringify(settings)); } catch (err) {}
+  renderPersonTabs();
+  renderAll();
+  applyingRemoteUpdate = false;
+}
+
+function subscribeToCloud(code) {
+  if (unsubscribeCloud) { unsubscribeCloud(); unsubscribeCloud = null; }
+  if (!code) { setSyncStatus('Not syncing — enter a sync code above to share data across devices.'); return; }
+  setSyncStatus('Connecting…');
+  ensureAuth().then(() => {
+    const ref = doc(db, 'calories', code);
+    unsubscribeCloud = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        applyRemoteData(snap.data());
+      } else {
+        setDoc(ref, { entries, settings }).catch(err => console.error(err));
+      }
+      setSyncStatus('Synced as "' + code + '"');
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error: ' + err.message);
+    });
+  });
+}
+
+async function pushToCloud(opts = {}) {
+  if (!coupleCode || applyingRemoteUpdate) return;
+  try {
+    await ensureAuth();
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'calories', coupleCode), { entries, settings }, writeOpts);
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error: could not save');
+  }
+}
+
+function onSyncCodeChange() {
+  const code = document.getElementById('syncCode').value.trim();
+  coupleCode = code;
+  try { localStorage.setItem('calorie_coupleCode', code); } catch (err) {}
+  subscribeToCloud(code);
+}
+
+function populateSettingsInputs() {
+  document.getElementById('p1Name').value = settings.p1;
+  document.getElementById('p2Name').value = settings.p2;
+  document.getElementById('p1CalGoal').value = settings.goals.p1.calories;
+  document.getElementById('p1ProtGoal').value = settings.goals.p1.protein;
+  document.getElementById('p2CalGoal').value = settings.goals.p2.calories;
+  document.getElementById('p2ProtGoal').value = settings.goals.p2.protein;
+}
+
+async function saveSettings() {
+  settings.p1 = document.getElementById('p1Name').value || 'You';
+  settings.p2 = document.getElementById('p2Name').value || 'Partner';
+  settings.goals = {
+    p1: {
+      calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
+      protein: parseInt(document.getElementById('p1ProtGoal').value) || 0
+    },
+    p2: {
+      calories: parseInt(document.getElementById('p2CalGoal').value) || 0,
+      protein: parseInt(document.getElementById('p2ProtGoal').value) || 0
+    }
+  };
+  try { localStorage.setItem('calorie_settings', JSON.stringify(settings)); } catch (err) {}
+  renderPersonTabs();
+  renderAll();
+  pushToCloud();
+}
+
+function renderPersonTabs() {
+  const tabs = document.getElementById('personTabs');
+  tabs.innerHTML = `
+    <button data-p="p1" class="${activePerson==='p1'?'active':''}">${settings.p1}</button>
+    <button data-p="p2" class="${activePerson==='p2'?'active':''}">${settings.p2}</button>
+  `;
+  tabs.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      activePerson = b.dataset.p;
+      renderPersonTabs();
+      renderLogCard();
+    });
+  });
+}
+
+function selectedDate() { return document.getElementById('datePicker').value || todayStr(); }
+
+function dayItems(person, dateStr) {
+  return ((entries[person] || {})[dateStr] || {}).items || [];
+}
+
+function dayTotals(person, dateStr) {
+  const items = dayItems(person, dateStr);
+  return items.reduce((t, it) => ({
+    calories: t.calories + (it.calories||0),
+    protein: t.protein + (it.protein||0),
+    carbs: t.carbs + (it.carbs||0),
+    fat: t.fat + (it.fat||0)
+  }), { calories:0, protein:0, carbs:0, fat:0 });
+}
+
+function clearManualFields() {
+  document.getElementById('foodName').value = '';
+  document.getElementById('foodCalories').value = '';
+  document.getElementById('foodProtein').value = '';
+  document.getElementById('foodCarbs').value = '';
+  document.getElementById('foodFat').value = '';
+  lastPer100 = null;
+}
+
+function recomputeFromGrams() {
+  if (!lastPer100) return;
+  const grams = parseFloat(document.getElementById('foodGrams').value) || 0;
+  const factor = grams / 100;
+  document.getElementById('foodCalories').value = Math.round(lastPer100.calories * factor);
+  document.getElementById('foodProtein').value = Math.round(lastPer100.protein * factor * 10) / 10;
+  document.getElementById('foodCarbs').value = Math.round(lastPer100.carbs * factor * 10) / 10;
+  document.getElementById('foodFat').value = Math.round(lastPer100.fat * factor * 10) / 10;
+}
+
+function getNutrientValue(foodNutrients, name, unit) {
+  const n = (foodNutrients||[]).find(x => x.nutrientName === name && (!unit || x.unitName === unit));
+  return n ? n.value : 0;
+}
+
+async function searchFood() {
+  const query = document.getElementById('foodQuery').value.trim();
+  const resultsEl = document.getElementById('searchResults');
+  if (!query) { resultsEl.innerHTML = ''; return; }
+  resultsEl.innerHTML = '<div class="empty">Searching…</div>';
+  try {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${FDC_API_KEY}&query=${encodeURIComponent(query)}&pageSize=6`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+    const data = await res.json();
+    const foods = data.foods || [];
+    if (foods.length === 0) { resultsEl.innerHTML = '<div class="empty">No matches found.</div>'; return; }
+    resultsEl.innerHTML = foods.map((f, i) => {
+      const cal = getNutrientValue(f.foodNutrients, 'Energy', 'KCAL');
+      const prot = getNutrientValue(f.foodNutrients, 'Protein');
+      return `<div class="search-result">
+        <div class="sr-name">${f.description}<div class="sr-macros">${Math.round(cal)} kcal · ${Math.round(prot)}g protein per 100g</div></div>
+        <button data-idx="${i}">Use</button>
+      </div>`;
+    }).join('');
+    resultsEl.querySelectorAll('button[data-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const f = foods[parseInt(btn.dataset.idx)];
+        lastPer100 = {
+          calories: getNutrientValue(f.foodNutrients, 'Energy', 'KCAL'),
+          protein: getNutrientValue(f.foodNutrients, 'Protein'),
+          carbs: getNutrientValue(f.foodNutrients, 'Carbohydrate, by difference'),
+          fat: getNutrientValue(f.foodNutrients, 'Total lipid (fat)')
+        };
+        document.getElementById('foodName').value = f.description;
+        recomputeFromGrams();
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    resultsEl.innerHTML = '<div class="empty">Search failed. You can still enter values manually below.</div>';
+  }
+}
+
+async function addItem() {
+  const name = document.getElementById('foodName').value.trim();
+  if (!name) { alert('Enter a food name.'); return; }
+  const grams = parseFloat(document.getElementById('foodGrams').value) || 0;
+  const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
+  const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
+  const carbs = parseFloat(document.getElementById('foodCarbs').value) || 0;
+  const fat = parseFloat(document.getElementById('foodFat').value) || 0;
+  const ds = selectedDate();
+  if (!entries[activePerson]) entries[activePerson] = {};
+  if (!entries[activePerson][ds]) entries[activePerson][ds] = { items: [] };
+  entries[activePerson][ds].items.push({ name, grams, calories, protein, carbs, fat });
+  try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
+  clearManualFields();
+  document.getElementById('foodQuery').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  renderLogCard();
+  renderMonth();
+  pushToCloud();
+}
+
+function deleteItem(index) {
+  const ds = selectedDate();
+  const items = dayItems(activePerson, ds);
+  items.splice(index, 1);
+  try { localStorage.setItem('calorie_entries', JSON.stringify(entries)); } catch (err) {}
+  renderLogCard();
+  renderMonth();
+  pushToCloud();
+}
+
+function renderLogCard() {
+  const ds = selectedDate();
+  const items = dayItems(activePerson, ds);
+  const listEl = document.getElementById('foodItemsList');
+  listEl.innerHTML = items.length === 0
+    ? '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>'
+    : items.map((it, i) => `<div class="food-item">
+        <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + 'g)</span>' : ''}</span>
+        <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g protein</span>
+        <button class="fi-del" data-i="${i}">&times;</button>
+      </div>`).join('');
+  listEl.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => deleteItem(parseInt(btn.dataset.i)));
+  });
+
+  const totals = dayTotals(activePerson, ds);
+  const goal = settings.goals[activePerson];
+  const calMet = totals.calories <= goal.calories;
+  const protMet = totals.protein >= goal.protein;
+  document.getElementById('totalsLine').innerHTML = `
+    <div class="totals-row"><span class="tname">Calories</span><span><span class="count">${Math.round(totals.calories)}/${goal.calories}</span><span class="status ${calMet?'met':'missed'}">${calMet?'On track':'Over'}</span></span></div>
+    <div class="totals-row"><span class="tname">Protein</span><span><span class="count">${Math.round(totals.protein)}/${goal.protein}g</span><span class="status ${protMet?'met':'missed'}">${protMet?'Met':'Under'}</span></span></div>
+  `;
+}
+
+function buildMonthGrid(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const cells = [];
+  for (let i=0;i<startOffset;i++) cells.push(null);
+  for (let d=1; d<=daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+function dayStatus(person, dateStr) {
+  const items = dayItems(person, dateStr);
+  if (items.length === 0) return 'none';
+  const totals = dayTotals(person, dateStr);
+  const goal = settings.goals[person];
+  const calOk = totals.calories <= goal.calories;
+  const protOk = totals.protein >= goal.protein;
+  return (calOk && protOk) ? 'good' : 'bad';
+}
+
+function renderMonth() {
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth();
+  document.getElementById('monthLabel').textContent = viewedMonth.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  document.getElementById('nextMonthBtn').disabled = isCurrentMonth;
+  document.getElementById('nextMonthBtn').style.opacity = isCurrentMonth ? 0.4 : 1;
+  document.getElementById('nextMonthBtn').style.cursor = isCurrentMonth ? 'default' : 'pointer';
+
+  const cells = buildMonthGrid(year, month);
+  const wrap = document.getElementById('monthCols');
+  wrap.innerHTML = ['p1','p2'].map(pk => {
+    const name = pk==='p1' ? settings.p1 : settings.p2;
+    const squares = cells.map(d => {
+      if (d === null) return '<div class="month-day blank"></div>';
+      const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const status = dayStatus(pk, ds);
+      const totals = dayTotals(pk, ds);
+      const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein';
+      return `<div class="month-day ${status}" title="${title}"></div>`;
+    }).join('');
+    return `<div class="month-col">
+      <div class="pname" style="color:var(--${pk})">${name}</div>
+      <div class="month-grid">${squares}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderAll() {
+  renderLogCard();
+  renderMonth();
+}
+
+async function loadData() {
+  try { entries = JSON.parse(localStorage.getItem('calorie_entries') || '{}'); } catch (err) { entries = {}; }
+  try {
+    const s = localStorage.getItem('calorie_settings');
+    settings = s ? JSON.parse(s) : settings;
+  } catch (err) {}
+
+  populateSettingsInputs();
+  document.getElementById('datePicker').value = todayStr();
+  document.getElementById('datePicker').max = todayStr();
+
+  const now = new Date();
+  viewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  renderPersonTabs();
+  renderAll();
+
+  try { coupleCode = localStorage.getItem('calorie_coupleCode') || ''; } catch (err) { coupleCode = ''; }
+  document.getElementById('syncCode').value = coupleCode;
+  subscribeToCloud(coupleCode);
+}
+
+document.getElementById('searchBtn').addEventListener('click', searchFood);
+document.getElementById('foodQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchFood(); } });
+document.getElementById('foodGrams').addEventListener('input', recomputeFromGrams);
+['foodCalories','foodProtein','foodCarbs','foodFat'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { lastPer100 = null; });
+});
+document.getElementById('addItemBtn').addEventListener('click', addItem);
+document.getElementById('datePicker').addEventListener('change', renderLogCard);
+
+['p1Name','p2Name','p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal'].forEach(id => {
+  document.getElementById(id).addEventListener('change', saveSettings);
+});
+document.getElementById('syncCode').addEventListener('change', onSyncCodeChange);
+
+document.getElementById('prevMonthBtn').addEventListener('click', () => {
+  viewedMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1, 1);
+  renderMonth();
+});
+document.getElementById('nextMonthBtn').addEventListener('click', () => {
+  const now = new Date();
+  const nowMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (viewedMonth.getTime() >= nowMonthStart.getTime()) return;
+  viewedMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 1);
+  renderMonth();
+});
+
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all logged food for both people? This cannot be undone.')) return;
+  entries = {};
+  try { localStorage.removeItem('calorie_entries'); } catch (err) {}
+  renderAll();
+  pushToCloud({ replace: true });
+});
+
+loadData();
+</script>
+</body>
+</html>
