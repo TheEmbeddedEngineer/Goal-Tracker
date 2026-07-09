@@ -145,6 +145,8 @@
   .month-day.good { background:var(--green-border); }
   .month-day.bad { background:var(--red-border); }
   .month-day.blank { background:none; }
+  .month-day:not(.blank) { cursor:pointer; }
+  .month-day.selected { outline:2px solid var(--accent); outline-offset:1px; }
   .month-legend { display:flex; gap:14px; font-size:11px; color:var(--text-muted); }
   .month-legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend-swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
@@ -779,11 +781,19 @@ function wkLoadData() {
 
 let calEntries = {};
 let calGoals = { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, protein: 120 } };
+// Goals in effect for a given past day, frozen at the moment the goal changes so that
+// editing goals later doesn't retroactively change how already-logged days evaluate.
+let calDailyGoals = {};
 let calFoodBank = [];
 let calActivePerson = 'p1';
 let calViewedMonth = null;
+let calSelectedMonthDate = null;
 let calUnsub = null;
 let calApplyingRemote = false;
+
+function calGoalsForDay(dateStr) {
+  return calDailyGoals[dateStr] || calGoals;
+}
 
 function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
 
@@ -795,11 +805,13 @@ function calApplyRemoteData(data) {
     sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
     calGoals = data.settings.goals || calGoals;
   }
+  calDailyGoals = data.dailyGoals || {};
   calFoodBank = data.foodBank || [];
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
+  try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   calRenderPersonTabs();
   calRenderAll();
@@ -833,6 +845,7 @@ async function calPushToCloud(opts = {}) {
     await setDoc(doc(db, 'calories', coupleCode), {
       entries: calEntries,
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
+      dailyGoals: calDailyGoals,
       foodBank: calFoodBank
     }, writeOpts);
   } catch (err) {
@@ -849,6 +862,17 @@ function calPopulateGoalsInputs() {
 }
 
 async function calSaveGoals() {
+  // Freeze the goal that was in effect for every already-logged past day before
+  // applying the new one, so this change doesn't retroactively affect them.
+  const today = todayStr();
+  const loggedDates = new Set();
+  ['p1','p2'].forEach(pk => Object.keys(calEntries[pk] || {}).forEach(ds => loggedDates.add(ds)));
+  loggedDates.forEach(ds => {
+    if (ds < today && !calDailyGoals[ds]) {
+      calDailyGoals[ds] = { p1: { ...calGoals.p1 }, p2: { ...calGoals.p2 } };
+    }
+  });
+
   calGoals = {
     p1: {
       calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
@@ -860,6 +884,7 @@ async function calSaveGoals() {
     }
   };
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
+  try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   calRenderPersonTabs();
   calRenderAll();
   calPushToCloud();
@@ -1172,7 +1197,7 @@ function calRenderLogCard() {
   });
 
   const totals = calDayTotals(calActivePerson, ds);
-  const goal = calGoals[calActivePerson];
+  const goal = calGoalsForDay(ds)[calActivePerson];
   const calMet = totals.calories <= goal.calories;
   const protMet = totals.protein >= goal.protein;
   document.getElementById('totalsLine').innerHTML = `
@@ -1183,7 +1208,8 @@ function calRenderLogCard() {
   `;
 }
 
-function calBuildMonthGrid(year, month) {
+// Shared by the calorie and training monthly calendars.
+function buildMonthGrid(year, month) {
   const firstDay = new Date(year, month, 1);
   const startOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, month+1, 0).getDate();
@@ -1197,7 +1223,7 @@ function calDayStatus(person, dateStr) {
   const items = calDayItems(person, dateStr);
   if (items.length === 0) return 'none';
   const totals = calDayTotals(person, dateStr);
-  const goal = calGoals[person];
+  const goal = calGoalsForDay(dateStr)[person];
   const calOk = totals.calories <= goal.calories;
   const protOk = totals.protein >= goal.protein;
   return (calOk && protOk) ? 'good' : 'bad';
@@ -1214,7 +1240,7 @@ function calRenderMonth() {
   document.getElementById('nextMonthBtn').style.opacity = isCurrentMonth ? 0.4 : 1;
   document.getElementById('nextMonthBtn').style.cursor = isCurrentMonth ? 'default' : 'pointer';
 
-  const cells = calBuildMonthGrid(year, month);
+  const cells = buildMonthGrid(year, month);
   const wrap = document.getElementById('monthCols');
   wrap.innerHTML = ['p1','p2'].map(pk => {
     const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
@@ -1224,13 +1250,25 @@ function calRenderMonth() {
       const status = calDayStatus(pk, ds);
       const totals = calDayTotals(pk, ds);
       const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein';
-      return `<div class="month-day ${status}" title="${title}"></div>`;
+      const selected = calSelectedMonthDate === ds && calActivePerson === pk ? ' selected' : '';
+      return `<div class="month-day ${status}${selected}" data-date="${ds}" data-person="${pk}" title="${title}"></div>`;
     }).join('');
     return `<div class="month-col">
       <div class="pname" style="color:var(--${pk})">${name}</div>
       <div class="month-grid">${squares}</div>
     </div>`;
   }).join('');
+  wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      calActivePerson = el.dataset.person;
+      calSelectedMonthDate = el.dataset.date;
+      document.getElementById('calDatePicker').value = el.dataset.date;
+      calRenderPersonTabs();
+      calRenderLogCard();
+      calRenderMonth();
+      document.getElementById('foodItemsList').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 }
 
 function calRenderAll() {
@@ -1244,6 +1282,7 @@ function calLoadData() {
     const s = localStorage.getItem('calorie_settings');
     if (s) { const parsed = JSON.parse(s); calGoals = parsed.goals || calGoals; }
   } catch (err) {}
+  try { calDailyGoals = JSON.parse(localStorage.getItem('calorie_dailyGoals') || '{}'); } catch (err) { calDailyGoals = {}; }
   try { calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { calFoodBank = []; }
 
   calPopulateGoalsInputs();
@@ -1539,6 +1578,8 @@ let trActivePerson = 'p1';
 let trActiveDay = 'overview';
 let trActiveVariant = 'gym';
 let trTrainingLog = { p1: [], p2: [] };
+let trOverviewViewedMonth = null;
+let trOverviewSelectedDate = null;
 let trUnsub = null;
 let trApplyingRemote = false;
 
@@ -1604,6 +1645,7 @@ function trRenderPersonTabs() {
       const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
       if (!order.includes(trActiveDay)) trActiveDay = 'overview';
       trActiveVariant = 'gym';
+      trOverviewSelectedDate = null;
       trRenderAll();
     });
   });
@@ -1642,7 +1684,85 @@ function trRenderOverview(plan) {
     </table>
     <div class="section-title">Notes</div>
     <ul class="rule-list">${plan.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+
+    <div class="section-title">Training log calendar</div>
+    <div class="month-nav">
+      <button id="trOverviewPrevMonthBtn">&larr;</button>
+      <h2 id="trOverviewMonthLabel" style="margin:0; font-size:15px;"></h2>
+      <button id="trOverviewNextMonthBtn">&rarr;</button>
+    </div>
+    <div class="month-grid" id="trOverviewCalGrid" style="margin-bottom:10px;"></div>
+    <div class="month-legend" style="margin-bottom:14px;">
+      <span><span class="legend-swatch" style="background:var(--green-border)"></span>Trained</span>
+      <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
+    </div>
+    <div id="trOverviewSelectedDay"></div>
   `;
+}
+
+function trLogsForDate(person, dateStr) {
+  return (trTrainingLog[person] || []).filter(l => l.date === dateStr);
+}
+
+function trDayVariantLabel(l) {
+  const label = DAY_LABELS_TR[l.day] || l.day;
+  return l.variant === 'home' ? label + ' (Home)' : l.variant === 'gym' ? label + ' (Gym)' : label;
+}
+
+function trRenderOverviewCalendarGrid() {
+  const year = trOverviewViewedMonth.getFullYear();
+  const month = trOverviewViewedMonth.getMonth();
+  document.getElementById('trOverviewMonthLabel').textContent = trOverviewViewedMonth.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const nextBtn = document.getElementById('trOverviewNextMonthBtn');
+  nextBtn.disabled = isCurrentMonth;
+  nextBtn.style.opacity = isCurrentMonth ? 0.4 : 1;
+  nextBtn.style.cursor = isCurrentMonth ? 'default' : 'pointer';
+
+  const cells = buildMonthGrid(year, month);
+  const wrap = document.getElementById('trOverviewCalGrid');
+  wrap.innerHTML = cells.map(d => {
+    if (d === null) return '<div class="month-day blank"></div>';
+    const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const logs = trLogsForDate(trActivePerson, ds);
+    const status = logs.length ? 'good' : '';
+    const selected = trOverviewSelectedDate === ds ? ' selected' : '';
+    const title = logs.length ? ds + ': ' + logs.map(trDayVariantLabel).join(', ') : ds + ': not logged';
+    return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}"></div>`;
+  }).join('');
+  wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      trOverviewSelectedDate = el.dataset.date;
+      trRenderOverviewCalendarGrid();
+      trRenderOverviewSelectedDay();
+    });
+  });
+}
+
+function trRenderOverviewSelectedDay() {
+  const el = document.getElementById('trOverviewSelectedDay');
+  if (!el) return;
+  if (!trOverviewSelectedDate) {
+    el.innerHTML = '<div class="empty-state" style="padding:0.5rem 0;">Tap a day in the calendar to see what was logged.</div>';
+    return;
+  }
+  const logs = trLogsForDate(trActivePerson, trOverviewSelectedDate);
+  if (logs.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="padding:0.5rem 0;">No training logged on ${trOverviewSelectedDate}.</div>`;
+    return;
+  }
+  el.innerHTML = logs.map(l => {
+    const prev = trFindPreviousLog(trActivePerson, l.day, l.variant, l.date);
+    return `<div class="past-log-row" style="margin-bottom:8px;">
+      <div class="pl-header" style="cursor:default;">
+        <span class="pl-date">${l.date}</span>
+        <span class="pl-meta">${trDayVariantLabel(l)}</span>
+      </div>
+      <div class="pl-detail open">${trRenderLogDetail(l, prev)}</div>
+    </div>`;
+  }).join('');
 }
 
 function trDayLogs(person, dayKey) {
@@ -1784,6 +1904,19 @@ function trRenderContent() {
   }
   if (trActiveDay === 'overview') {
     contentEl.innerHTML = trRenderOverview(plan.overview);
+    document.getElementById('trOverviewPrevMonthBtn').addEventListener('click', () => {
+      trOverviewViewedMonth = new Date(trOverviewViewedMonth.getFullYear(), trOverviewViewedMonth.getMonth() - 1, 1);
+      trRenderOverviewCalendarGrid();
+    });
+    document.getElementById('trOverviewNextMonthBtn').addEventListener('click', () => {
+      const now = new Date();
+      const nowMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (trOverviewViewedMonth.getTime() >= nowMonthStart.getTime()) return;
+      trOverviewViewedMonth = new Date(trOverviewViewedMonth.getFullYear(), trOverviewViewedMonth.getMonth() + 1, 1);
+      trRenderOverviewCalendarGrid();
+    });
+    trRenderOverviewCalendarGrid();
+    trRenderOverviewSelectedDay();
   } else if (trActiveDay === 'backcare') {
     contentEl.innerHTML = trRenderBackCare(plan.backcare);
   } else {
@@ -1853,6 +1986,9 @@ function trLoadData() {
     trTrainingLog.p1 = trTrainingLog.p1 || [];
     trTrainingLog.p2 = trTrainingLog.p2 || [];
   } catch (err) { trTrainingLog = { p1: [], p2: [] }; }
+
+  const now = new Date();
+  trOverviewViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   trRenderAll();
 }
