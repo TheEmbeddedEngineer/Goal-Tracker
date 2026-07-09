@@ -141,7 +141,8 @@
   .month-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
   .month-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
   .month-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:8px; }
-  .month-day { aspect-ratio:1; border-radius:5px; background:var(--heat-none); }
+  .month-day { aspect-ratio:1; border-radius:5px; background:var(--heat-none); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--text-muted); }
+  .month-day.good { color:var(--green-text); }
   .month-day.good { background:var(--green-border); }
   .month-day.bad { background:var(--red-border); }
   .month-day.blank { background:none; }
@@ -1673,7 +1674,20 @@ function trExRow([name, reps, url]) {
 
 function trRenderOverview(plan) {
   return `
-    <h2>Overview</h2>
+    <h2>Training log calendar</h2>
+    <div class="month-nav">
+      <button id="trOverviewPrevMonthBtn">&larr;</button>
+      <h2 id="trOverviewMonthLabel" style="margin:0; font-size:15px;"></h2>
+      <button id="trOverviewNextMonthBtn">&rarr;</button>
+    </div>
+    <div class="month-grid" id="trOverviewCalGrid" style="margin-bottom:10px;"></div>
+    <div class="month-legend" style="margin-bottom:14px;">
+      <span><span class="legend-swatch" style="background:var(--green-border)"></span>Trained (day shown in square)</span>
+      <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
+    </div>
+    <div id="trOverviewSelectedDay"></div>
+
+    <h2 style="margin-top:20px;">Overview</h2>
     <p class="card-sub">${plan.goal}</p>
     <div class="section-title">Flexible scheduling rules</div>
     <ul class="rule-list">${plan.rules.map(r => `<li>${r}</li>`).join('')}</ul>
@@ -1684,19 +1698,6 @@ function trRenderOverview(plan) {
     </table>
     <div class="section-title">Notes</div>
     <ul class="rule-list">${plan.notes.map(n => `<li>${n}</li>`).join('')}</ul>
-
-    <div class="section-title">Training log calendar</div>
-    <div class="month-nav">
-      <button id="trOverviewPrevMonthBtn">&larr;</button>
-      <h2 id="trOverviewMonthLabel" style="margin:0; font-size:15px;"></h2>
-      <button id="trOverviewNextMonthBtn">&rarr;</button>
-    </div>
-    <div class="month-grid" id="trOverviewCalGrid" style="margin-bottom:10px;"></div>
-    <div class="month-legend" style="margin-bottom:14px;">
-      <span><span class="legend-swatch" style="background:var(--green-border)"></span>Trained</span>
-      <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
-    </div>
-    <div id="trOverviewSelectedDay"></div>
   `;
 }
 
@@ -1707,6 +1708,12 @@ function trLogsForDate(person, dateStr) {
 function trDayVariantLabel(l) {
   const label = DAY_LABELS_TR[l.day] || l.day;
   return l.variant === 'home' ? label + ' (Home)' : l.variant === 'gym' ? label + ' (Gym)' : label;
+}
+
+// Short label shown directly inside the calendar square, e.g. "day2" -> "D2".
+function trDayShortLabel(l) {
+  const m = /^day(\d+)$/.exec(l.day);
+  return m ? 'D' + m[1] : (l.day === 'backcare' ? 'BC' : l.day);
 }
 
 function trRenderOverviewCalendarGrid() {
@@ -1730,7 +1737,8 @@ function trRenderOverviewCalendarGrid() {
     const status = logs.length ? 'good' : '';
     const selected = trOverviewSelectedDate === ds ? ' selected' : '';
     const title = logs.length ? ds + ': ' + logs.map(trDayVariantLabel).join(', ') : ds + ': not logged';
-    return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}"></div>`;
+    const label = logs.length ? logs.map(trDayShortLabel).join('/') : '';
+    return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}">${label}</div>`;
   }).join('');
   wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
     el.addEventListener('click', () => {
