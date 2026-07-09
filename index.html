@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weekly accountability tracker</title>
+<title>Couple tracker</title>
 <link rel="icon" type="image/png" href="icon-weekly.png">
 <link rel="apple-touch-icon" href="icon-weekly.png">
 <style>
@@ -26,6 +26,7 @@
     --heat-1: #cfe3c6;
     --heat-2: #94c684;
     --heat-3: #4f9c3c;
+    --heat-none: #eceae2;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -37,15 +38,22 @@
       --accent: #d97757; --accent-text: #1c1a17;
       --p1: #7fb0e8; --p2: #e090bb;
       --heat-0: #34322b; --heat-1: #2f4429; --heat-2: #3c6a33; --heat-3: #4f9c3c;
+      --heat-none: #34322b;
     }
+  }
+  /* Training section keeps its own blue accent, matching the original standalone page */
+  #section-training { --accent: #3d6da8; --accent-text: #ffffff; --up: #2f8f46; --down: #c0392b; }
+  @media (prefers-color-scheme: dark) {
+    #section-training { --accent: #7fb0e8; --accent-text: #1c1a17; --up: #6fcf87; --down: #f28b82; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:1.5rem 1rem 3rem; }
-  .wrap { max-width: 680px; margin:0 auto; }
+  .wrap { max-width: 720px; margin:0 auto; }
   h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
   .sub { color:var(--text-secondary); font-size:14px; margin:0 0 1.5rem; }
   .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.1rem 1.25rem; margin-bottom:1rem; }
   .card h2 { font-size:15px; font-weight:600; margin:0 0 12px; }
+  .card .card-sub { font-size:13px; color:var(--text-secondary); margin:0 0 14px; }
   #setupArrow { font-size:12px; color:var(--text-muted); transition:transform 0.15s; }
   #setupBody.collapsed { display:none; }
   .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
@@ -56,6 +64,9 @@
   .cat-threshold-row .catlabel { flex:1; font-size:13px; }
   .cat-threshold-row input { width:56px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; text-align:center; }
   .cat-threshold-row .of7 { font-size:12px; color:var(--text-muted); }
+  .main-tabs { display:flex; gap:6px; margin-bottom:1rem; }
+  .main-tabs button { flex:1; padding:10px; border:1px solid var(--border-strong); border-radius:10px; background:var(--card); color:var(--text); font-size:14px; font-weight:600; cursor:pointer; }
+  .main-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); }
   .person-tabs { display:flex; gap:6px; margin-bottom:14px; }
   .person-tabs button { flex:1; padding:8px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
   .person-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
@@ -98,12 +109,96 @@
   .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:1rem 0; }
   .link-btn { background:none; border:none; color:var(--text-muted); font-size:12px; text-decoration:underline; cursor:pointer; padding:4px; }
   .footer-actions { display:flex; justify-content:flex-end; margin-top:1.5rem; }
+  .sync-status { font-size:12px; color:var(--text-muted); margin:-4px 0 12px; }
+  .manual-grid { display:grid; grid-template-columns: 1.5fr 1.5fr 1fr; gap:8px; margin-bottom:8px; }
+  .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .autocomplete-dropdown { display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--border-strong); border-radius:8px; margin-top:4px; max-height:220px; overflow-y:auto; z-index:10; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+  .autocomplete-dropdown.open { display:block; }
+  .autocomplete-item { padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); }
+  .autocomplete-item:last-child { border-bottom:none; }
+  .autocomplete-item:hover, .autocomplete-item.active { background:var(--bg); }
+  .autocomplete-item .ai-sub { font-size:11px; color:var(--text-muted); }
+  .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
+  .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
+  .food-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .food-item:last-child { border-bottom:none; }
+  .food-item .fi-name { flex:1; min-width:0; }
+  .food-item .fi-macros { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+  .food-item .fi-edit { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:13px; cursor:pointer; padding:2px 6px; }
+  .food-item .fi-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
+  .totals-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border-strong); }
+  .totals-row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; }
+  .totals-row .tname { color:var(--text-secondary); flex:1; min-width:0; }
+  .totals-row > span:last-child { display:flex; align-items:center; flex-shrink:0; white-space:nowrap; }
+  .month-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .month-nav button { padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
+  .month-nav h2 { margin:0; }
+  .month-cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  @media (max-width: 480px) {
+    .month-cols { grid-template-columns: 1fr; }
+    .manual-grid, .manual-grid.macros { grid-template-columns: 1fr 1fr; }
+  }
+  .month-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .month-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
+  .month-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:8px; }
+  .month-day { aspect-ratio:1; border-radius:5px; background:var(--heat-none); }
+  .month-day.good { background:var(--green-border); }
+  .month-day.bad { background:var(--red-border); }
+  .month-day.blank { background:none; }
+  .month-legend { display:flex; gap:14px; font-size:11px; color:var(--text-muted); }
+  .month-legend span { display:inline-flex; align-items:center; gap:4px; }
+  .legend-swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .day-tabs { display:flex; gap:6px; margin-bottom:1rem; overflow-x:auto; padding-bottom:2px; }
+  .day-tabs button { flex-shrink:0; padding:8px 14px; border:1px solid var(--border-strong); border-radius:100px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; white-space:nowrap; }
+  .day-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .variant-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .variant-tabs button { padding:6px 12px; border:1px solid var(--border-strong); border-radius:8px; background:var(--bg); color:var(--text); font-size:12px; cursor:pointer; }
+  .variant-tabs button.active { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .ex-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .ex-row:last-child { border-bottom:none; }
+  .ex-name { flex:1; min-width:0; font-size:14px; }
+  .ex-reps { font-size:12px; color:var(--text-muted); flex-shrink:0; white-space:nowrap; }
+  .ex-link { flex-shrink:0; }
+  .ex-link a { display:inline-block; padding:5px 10px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); text-decoration:none; font-size:12px; white-space:nowrap; }
+  .section-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin:18px 0 6px; }
+  .section-title:first-child { margin-top:0; }
+  .note { font-size:13px; color:var(--text-secondary); line-height:1.5; margin:0 0 10px; }
+  .freq-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  .freq-table th, .freq-table td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .freq-table th { color:var(--text-secondary); font-weight:600; font-size:12px; }
+  .rule-list { margin:0; padding-left:1.1rem; font-size:13px; color:var(--text-secondary); line-height:1.6; }
+  .empty-state { text-align:center; color:var(--text-muted); font-size:13px; padding:2rem 1rem; }
+  .log-date-row { margin-bottom:10px; }
+  .log-date-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+  .log-date-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .log-weight-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+  .log-weight-row .lw-name { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
+  .log-weight-row input { width:90px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
+  .past-log-row { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; background:var(--bg); }
+  .past-log-row:last-child { margin-bottom:0; }
+  .pl-header { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; font-size:13px; }
+  .pl-header .pl-date { flex-shrink:0; font-weight:600; width:80px; }
+  .pl-header .pl-meta { flex:1; min-width:0; color:var(--text-secondary); font-size:12px; }
+  .pl-chevron { flex-shrink:0; color:var(--text-muted); font-size:10px; display:inline-block; transition:transform .15s ease; }
+  .pl-chevron.open { transform:rotate(90deg); }
+  .pl-edit, .pl-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:14px; cursor:pointer; padding:3px 6px; line-height:1; }
+  .pl-edit:hover, .pl-del:hover { color:var(--text); }
+  .pl-detail { display:none; padding:2px 10px 8px; border-top:1px solid var(--border); }
+  .pl-detail.open { display:block; }
+  .pl-ex-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:12px; }
+  .pl-ex-row + .pl-ex-row { border-top:1px solid var(--border); }
+  .pl-ex-name { flex:1; min-width:0; color:var(--text-secondary); }
+  .pl-ex-weight { flex-shrink:0; font-weight:600; width:52px; text-align:right; }
+  .pl-ex-delta { flex-shrink:0; font-size:11px; width:64px; text-align:right; }
+  .pl-ex-delta.up { color:var(--up); }
+  .pl-ex-delta.down { color:var(--down); }
+  .pl-ex-delta.flat { color:var(--text-muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Weekly accountability tracker</h1>
-  <p class="sub">Weeks run Monday to Sunday. Each category has its own target number of days.</p>
+  <h1>Couple tracker</h1>
+  <p class="sub">Weekly accountability, calories, and training — one shared setup, three trackers.</p>
 
   <div class="card">
     <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Setup <span id="setupArrow">&#9656;</span></h2>
@@ -115,45 +210,127 @@
       <div class="settings-row">
         <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
       </div>
-      <p id="syncStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 12px;"></p>
-      <div style="margin-top:8px;">
-        <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">Days needed per category (of 7)</label>
-        <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-        <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-        <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <p id="syncStatus" class="sync-status"></p>
+    </div>
+  </div>
+
+  <div class="main-tabs">
+    <button data-tab="weekly" class="active">Weekly</button>
+    <button data-tab="calories">Calories</button>
+    <button data-tab="training">Training</button>
+  </div>
+
+  <!-- ===================== WEEKLY SECTION ===================== -->
+  <div id="section-weekly">
+    <div class="card">
+      <h2>Days needed per category</h2>
+      <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Log a day</h2>
+      <div class="person-tabs" id="wkPersonTabs"></div>
+      <div class="date-picker-row">
+        <label>Date</label>
+        <input type="date" id="wkDatePicker">
+      </div>
+      <div class="goal-row" data-key="nutrition"><input type="checkbox" id="cbNutrition"><span class="name">Nutrition</span></div>
+      <div class="goal-row" data-key="screen"><input type="checkbox" id="cbScreen"><span class="name">Screen time</span></div>
+      <div class="goal-row" data-key="sport"><input type="checkbox" id="cbSport"><span class="name">Sport</span></div>
+      <button class="primary" id="saveBtn">Save this day</button>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <button id="prevWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&larr;</button>
+        <h2 id="weekRangeLabel" style="margin:0;">This week</h2>
+        <button id="nextWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&rarr;</button>
+      </div>
+      <div class="week-cols" id="weekCols"></div>
+    </div>
+
+    <div class="card">
+      <h2>Past weeks</h2>
+      <div id="historyList"><div class="empty">No completed weeks yet</div></div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="link-btn" id="wkResetBtn">Clear all weekly data</button>
+    </div>
+  </div>
+
+  <!-- ===================== CALORIES SECTION ===================== -->
+  <div id="section-calories" style="display:none">
+    <div class="card">
+      <h2>Goals</h2>
+      <div class="settings-row">
+        <div><label id="p1CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p1CalGoal" min="0" value="2000"></div>
+        <div><label id="p1ProtLabel">Protein goal (min, g)</label><input type="number" id="p1ProtGoal" min="0" value="120"></div>
+      </div>
+      <div class="settings-row">
+        <div><label id="p2CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p2CalGoal" min="0" value="2000"></div>
+        <div><label id="p2ProtLabel">Protein goal (min, g)</label><input type="number" id="p2ProtGoal" min="0" value="120"></div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <h2>Log a day</h2>
-    <div class="person-tabs" id="personTabs"></div>
-    <div class="date-picker-row">
-      <label>Date</label>
-      <input type="date" id="datePicker">
+    <div class="card">
+      <h2>Log food</h2>
+      <div class="person-tabs" id="calPersonTabs"></div>
+      <div class="date-picker-row">
+        <label>Date</label>
+        <input type="date" id="calDatePicker">
+      </div>
+
+      <div style="position:relative; margin-bottom:8px;">
+        <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Food name (English or Deutsch)</label>
+        <input type="text" id="foodSearchInput" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+        <div id="foodNameDropdown" class="autocomplete-dropdown"></div>
+      </div>
+      <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
+        <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
+        <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Piece / serving</option></select></div>
+      </div>
+      <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
+      <div class="manual-grid macros">
+        <div><label>Calories</label><input type="number" id="foodCalories" min="0"></div>
+        <div><label>Protein (g)</label><input type="number" id="foodProtein" min="0"></div>
+        <div><label>Carbs (g)</label><input type="number" id="foodCarbs" min="0"></div>
+        <div><label>Fat (g)</label><input type="number" id="foodFat" min="0"></div>
+      </div>
+      <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Not in our bank? Search on Google &rarr;</button>
+      <button class="primary" id="addItemBtn">Add to log</button>
+      <button type="button" class="link-btn" id="cancelEditBtn" style="display:none; width:100%; text-align:center;">Cancel edit</button>
+
+      <div id="foodItemsList"></div>
+      <div class="totals-line" id="totalsLine"></div>
     </div>
-    <div class="goal-row" data-key="nutrition"><input type="checkbox" id="cbNutrition"><span class="name">Nutrition</span></div>
-    <div class="goal-row" data-key="screen"><input type="checkbox" id="cbScreen"><span class="name">Screen time</span></div>
-    <div class="goal-row" data-key="sport"><input type="checkbox" id="cbSport"><span class="name">Sport</span></div>
-    <button class="primary" id="saveBtn">Save this day</button>
-  </div>
 
-  <div class="card">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-      <button id="prevWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&larr;</button>
-      <h2 id="weekRangeLabel" style="margin:0;">This week</h2>
-      <button id="nextWeekBtn" style="padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer;">&rarr;</button>
+    <div class="card">
+      <div class="month-nav">
+        <button id="prevMonthBtn">&larr;</button>
+        <h2 id="monthLabel"></h2>
+        <button id="nextMonthBtn">&rarr;</button>
+      </div>
+      <div class="month-cols" id="monthCols"></div>
+      <div class="month-legend">
+        <span><span class="legend-swatch" style="background:var(--green-border)"></span>Goals met</span>
+        <span><span class="legend-swatch" style="background:var(--red-border)"></span>Goals missed</span>
+        <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
+      </div>
     </div>
-    <div class="week-cols" id="weekCols"></div>
+
+    <div class="footer-actions">
+      <button class="link-btn" id="calResetBtn">Clear all calorie data</button>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Past weeks</h2>
-    <div id="historyList"><div class="empty">No completed weeks yet</div></div>
-  </div>
-
-  <div class="footer-actions">
-    <button class="link-btn" id="resetBtn">Clear all data</button>
+  <!-- ===================== TRAINING SECTION ===================== -->
+  <div id="section-training" style="display:none">
+    <div class="person-tabs" id="trPersonTabs"></div>
+    <div class="day-tabs" id="trDayTabs"></div>
+    <div class="card" id="trContent"></div>
   </div>
 </div>
 
@@ -174,23 +351,12 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
-const DAY_LABELS = ['M','T','W','T','F','S','S'];
-const EARLIEST_VISIBLE_WEEK = '2026-06-29';
-let entries = {};
-let settings = { p1: 'You', p2: 'Partner', thresholds: { nutrition:5, screen:5, sport:5 } };
-let weeklyThresholds = {};
-let activePerson = 'p1';
-let viewedWeekMonday = null;
-let coupleCode = '';
-let unsubscribeCloud = null;
-let authReadyPromise = null;
-let applyingRemoteUpdate = false;
+/* ===================== SHARED: setup (names + sync code) ===================== */
 
-function setSyncStatus(text) {
-  const el = document.getElementById('syncStatus');
-  if (el) el.textContent = text;
-}
+let coupleCode = '';
+let sharedSettings = { p1: 'You', p2: 'Partner' };
+let authReadyPromise = null;
+let syncReadyCount = 0;
 
 function ensureAuth() {
   if (!authReadyPromise) {
@@ -202,70 +368,149 @@ function ensureAuth() {
   return authReadyPromise;
 }
 
-function applyRemoteData(data) {
-  applyingRemoteUpdate = true;
-  entries = data.entries || {};
-  settings = data.settings || settings;
-  weeklyThresholds = data.weeklyThresholds || {};
-  document.getElementById('p1Name').value = settings.p1;
-  document.getElementById('p2Name').value = settings.p2;
-  document.getElementById('thNutrition').value = settings.thresholds.nutrition;
-  document.getElementById('thScreen').value = settings.thresholds.screen;
-  document.getElementById('thSport').value = settings.thresholds.sport;
-  try { localStorage.setItem('entries', JSON.stringify(entries)); } catch (err) {}
-  try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (err) {}
-  try { localStorage.setItem('weeklyThresholds', JSON.stringify(weeklyThresholds)); } catch (err) {}
-  renderPersonTabs();
-  loadCheckboxesForDate();
-  renderAll();
-  applyingRemoteUpdate = false;
+function setSyncStatus(text) {
+  const el = document.getElementById('syncStatus');
+  if (el) el.textContent = text;
 }
 
-function subscribeToCloud(code) {
-  if (unsubscribeCloud) { unsubscribeCloud(); unsubscribeCloud = null; }
-  if (!code) { setSyncStatus('Not syncing — enter a sync code above to share data across devices.'); return; }
-  setSyncStatus('Connecting…');
-  ensureAuth().then(() => {
-    const ref = doc(db, 'trackers', code);
-    unsubscribeCloud = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        applyRemoteData(snap.data());
-      } else {
-        setDoc(ref, { entries, settings, weeklyThresholds }).catch(err => console.error(err));
-      }
-      setSyncStatus('Synced as "' + code + '"');
-    }, (err) => {
-      console.error(err);
-      setSyncStatus('Sync error: ' + err.message);
-    });
-  });
+function markSynced() {
+  syncReadyCount = Math.min(syncReadyCount + 1, 3);
+  if (syncReadyCount >= 3) setSyncStatus('Synced as "' + coupleCode + '"');
 }
 
-async function pushToCloud(opts = {}) {
-  if (!coupleCode || applyingRemoteUpdate) return;
-  try {
-    await ensureAuth();
-    const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'trackers', coupleCode), { entries, settings, weeklyThresholds }, writeOpts);
-  } catch (err) {
-    console.error(err);
-    setSyncStatus('Sync error: could not save');
-  }
+function applySharedSettingsToInputs() {
+  document.getElementById('p1Name').value = sharedSettings.p1;
+  document.getElementById('p2Name').value = sharedSettings.p2;
+}
+
+function saveSharedSettings() {
+  sharedSettings.p1 = document.getElementById('p1Name').value || 'You';
+  sharedSettings.p2 = document.getElementById('p2Name').value || 'Partner';
+  try { localStorage.setItem('sharedSettings', JSON.stringify(sharedSettings)); } catch (err) {}
+  wkRenderPersonTabs(); wkRenderAll();
+  calRenderPersonTabs(); calRenderAll();
+  trRenderPersonTabs(); trRenderDayTabs(); trRenderContent();
+  wkPushToCloud(); calPushToCloud(); trPushToCloud();
 }
 
 function onSyncCodeChange() {
   const code = document.getElementById('syncCode').value.trim();
   coupleCode = code;
   try { localStorage.setItem('coupleCode', code); } catch (err) {}
-  subscribeToCloud(code);
+  syncReadyCount = 0;
+  setSyncStatus(code ? 'Connecting…' : 'Not syncing — enter a sync code above to share data across devices.');
+  wkSubscribeToCloud(code);
+  calSubscribeToCloud(code);
+  trSubscribeToCloud(code);
 }
+
+document.getElementById('p1Name').addEventListener('change', saveSharedSettings);
+document.getElementById('p2Name').addEventListener('change', saveSharedSettings);
+document.getElementById('syncCode').addEventListener('change', onSyncCodeChange);
+
+function setSetupCollapsed(collapsed) {
+  document.getElementById('setupBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('setupArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('setupCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+document.getElementById('setupToggle').addEventListener('click', () => {
+  setSetupCollapsed(!document.getElementById('setupBody').classList.contains('collapsed'));
+});
+
+/* ===================== SHARED: tab navigation ===================== */
+
+const SECTION_IDS = { weekly: 'section-weekly', calories: 'section-calories', training: 'section-training' };
+function showTab(tab) {
+  if (!SECTION_IDS[tab]) tab = 'weekly';
+  Object.entries(SECTION_IDS).forEach(([key, id]) => {
+    document.getElementById(id).style.display = key === tab ? '' : 'none';
+  });
+  document.querySelectorAll('.main-tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  try { localStorage.setItem('activeTab', tab); } catch (err) {}
+}
+document.querySelectorAll('.main-tabs button').forEach(b => {
+  b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+
+/* ===================== SHARED: date helpers ===================== */
 
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
-function fmtDate(s) { return parseDate(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+/* ===================== WEEKLY TRACKER ===================== */
+
+const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
+const DAY_LABELS = ['M','T','W','T','F','S','S'];
+const EARLIEST_VISIBLE_WEEK = '2026-06-29';
+let wkEntries = {};
+let wkThresholds = { nutrition:5, screen:5, sport:5 };
+let wkWeeklyThresholds = {};
+let wkActivePerson = 'p1';
+let wkViewedWeekMonday = null;
+let wkUnsub = null;
+let wkApplyingRemote = false;
+
+function wkApplyRemoteData(data) {
+  wkApplyingRemote = true;
+  wkEntries = data.entries || {};
+  if (data.settings) {
+    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
+    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+    wkThresholds = data.settings.thresholds || wkThresholds;
+  }
+  wkWeeklyThresholds = data.weeklyThresholds || {};
+  applySharedSettingsToInputs();
+  document.getElementById('thNutrition').value = wkThresholds.nutrition;
+  document.getElementById('thScreen').value = wkThresholds.screen;
+  document.getElementById('thSport').value = wkThresholds.sport;
+  try { localStorage.setItem('entries', JSON.stringify(wkEntries)); } catch (err) {}
+  try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds })); } catch (err) {}
+  try { localStorage.setItem('weeklyThresholds', JSON.stringify(wkWeeklyThresholds)); } catch (err) {}
+  wkRenderPersonTabs();
+  wkLoadCheckboxesForDate();
+  wkRenderAll();
+  wkApplyingRemote = false;
+}
+
+function wkSubscribeToCloud(code) {
+  if (wkUnsub) { wkUnsub(); wkUnsub = null; }
+  if (!code) return;
+  ensureAuth().then(() => {
+    const ref = doc(db, 'trackers', code);
+    wkUnsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        wkApplyRemoteData(snap.data());
+      } else {
+        wkPushToCloud({ replace: true });
+      }
+      markSynced();
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error (weekly): ' + err.message);
+    });
+  });
+}
+
+async function wkPushToCloud(opts = {}) {
+  if (!coupleCode || wkApplyingRemote) return;
+  try {
+    await ensureAuth();
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'trackers', coupleCode), {
+      entries: wkEntries,
+      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds },
+      weeklyThresholds: wkWeeklyThresholds
+    }, writeOpts);
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (weekly): could not save');
+  }
+}
+
 function getMonday(dateObj) {
   const d = new Date(dateObj);
   const day = d.getDay();
@@ -274,119 +519,83 @@ function getMonday(dateObj) {
   d.setHours(0,0,0,0);
   return d;
 }
-function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function fmtDate(s) { return parseDate(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 function weekKeyFor(dateStr) { return dstr(getMonday(parseDate(dateStr))); }
 
-async function loadData() {
-  try {
-    const e = localStorage.getItem('entries');
-    entries = e ? JSON.parse(e) : {};
-  } catch (err) { entries = {}; }
-  try {
-    const s = localStorage.getItem('settings');
-    settings = s ? JSON.parse(s) : settings;
-  } catch (err) {}
-  try {
-    const wt = localStorage.getItem('weeklyThresholds');
-    weeklyThresholds = wt ? JSON.parse(wt) : {};
-  } catch (err) { weeklyThresholds = {}; }
-
-  document.getElementById('p1Name').value = settings.p1;
-  document.getElementById('p2Name').value = settings.p2;
-  document.getElementById('thNutrition').value = settings.thresholds.nutrition;
-  document.getElementById('thScreen').value = settings.thresholds.screen;
-  document.getElementById('thSport').value = settings.thresholds.sport;
-  document.getElementById('datePicker').value = todayStr();
-  document.getElementById('datePicker').max = todayStr();
-
-  viewedWeekMonday = getMonday(new Date());
-
-  renderPersonTabs();
-  loadCheckboxesForDate();
-  renderAll();
-
-  try { coupleCode = localStorage.getItem('coupleCode') || ''; } catch (err) { coupleCode = ''; }
-  document.getElementById('syncCode').value = coupleCode;
-  subscribeToCloud(coupleCode);
-}
-
-async function saveSettings() {
-  settings.p1 = document.getElementById('p1Name').value || 'You';
-  settings.p2 = document.getElementById('p2Name').value || 'Partner';
-  settings.thresholds = {
+async function wkSaveThresholds() {
+  wkThresholds = {
     nutrition: parseInt(document.getElementById('thNutrition').value) || 1,
     screen: parseInt(document.getElementById('thScreen').value) || 1,
     sport: parseInt(document.getElementById('thSport').value) || 1
   };
-  try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (err) {}
-  renderPersonTabs();
-  renderAll();
-  pushToCloud();
+  try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds })); } catch (err) {}
+  wkRenderAll();
+  wkPushToCloud();
 }
 
-function renderPersonTabs() {
-  const tabs = document.getElementById('personTabs');
+function wkRenderPersonTabs() {
+  const tabs = document.getElementById('wkPersonTabs');
   tabs.innerHTML = `
-    <button data-p="p1" class="${activePerson==='p1'?'active':''}">${settings.p1}</button>
-    <button data-p="p2" class="${activePerson==='p2'?'active':''}">${settings.p2}</button>
+    <button data-p="p1" class="${wkActivePerson==='p1'?'active':''}">${sharedSettings.p1}</button>
+    <button data-p="p2" class="${wkActivePerson==='p2'?'active':''}">${sharedSettings.p2}</button>
   `;
   tabs.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => {
-      activePerson = b.dataset.p;
-      renderPersonTabs();
-      loadCheckboxesForDate();
+      wkActivePerson = b.dataset.p;
+      wkRenderPersonTabs();
+      wkLoadCheckboxesForDate();
     });
   });
 }
 
-function selectedDate() { return document.getElementById('datePicker').value || todayStr(); }
+function wkSelectedDate() { return document.getElementById('wkDatePicker').value || todayStr(); }
 
-function loadCheckboxesForDate() {
-  const ds = selectedDate();
-  const day = (entries[activePerson] || {})[ds] || {};
+function wkLoadCheckboxesForDate() {
+  const ds = wkSelectedDate();
+  const day = (wkEntries[wkActivePerson] || {})[ds] || {};
   document.getElementById('cbNutrition').checked = !!day.nutrition;
   document.getElementById('cbScreen').checked = !!day.screen;
   document.getElementById('cbSport').checked = !!day.sport;
-  updateRowStyles();
+  wkUpdateRowStyles();
 }
 
-function updateRowStyles() {
-  document.querySelectorAll('.goal-row').forEach(row => {
+function wkUpdateRowStyles() {
+  document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
     const cb = row.querySelector('input');
     row.classList.toggle('done', cb.checked);
   });
 }
 
-async function saveDay() {
-  const ds = selectedDate();
-  if (!entries[activePerson]) entries[activePerson] = {};
-  entries[activePerson][ds] = {
+async function wkSaveDay() {
+  const ds = wkSelectedDate();
+  if (!wkEntries[wkActivePerson]) wkEntries[wkActivePerson] = {};
+  wkEntries[wkActivePerson][ds] = {
     nutrition: document.getElementById('cbNutrition').checked,
     screen: document.getElementById('cbScreen').checked,
     sport: document.getElementById('cbSport').checked
   };
-  try { localStorage.setItem('entries', JSON.stringify(entries)); } catch (err) { console.error(err); }
-  renderAll();
-  pushToCloud();
+  try { localStorage.setItem('entries', JSON.stringify(wkEntries)); } catch (err) { console.error(err); }
+  wkRenderAll();
+  wkPushToCloud();
 }
 
-function thresholdsForWeek(weekMonday) {
+function wkThresholdsForWeek(weekMonday) {
   const key = dstr(weekMonday);
   const nowMonday = getMonday(new Date());
   if (weekMonday.getTime() < nowMonday.getTime()) {
-    if (!weeklyThresholds[key]) {
-      weeklyThresholds[key] = { ...settings.thresholds };
-      try { localStorage.setItem('weeklyThresholds', JSON.stringify(weeklyThresholds)); } catch (err) {}
-      pushToCloud();
+    if (!wkWeeklyThresholds[key]) {
+      wkWeeklyThresholds[key] = { ...wkThresholds };
+      try { localStorage.setItem('weeklyThresholds', JSON.stringify(wkWeeklyThresholds)); } catch (err) {}
+      wkPushToCloud();
     }
-    return weeklyThresholds[key];
+    return wkWeeklyThresholds[key];
   }
-  return settings.thresholds;
+  return wkThresholds;
 }
 
-function catCountsForWeek(personKey, weekMonday) {
+function wkCatCountsForWeek(personKey, weekMonday) {
   const counts = { nutrition:0, screen:0, sport:0 };
-  const personEntries = entries[personKey] || {};
+  const personEntries = wkEntries[personKey] || {};
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
     const day = personEntries[dstr(d)];
@@ -395,20 +604,20 @@ function catCountsForWeek(personKey, weekMonday) {
   return counts;
 }
 
-function dayCompletionLevel(personKey, dateStr) {
-  const day = (entries[personKey] || {})[dateStr];
+function wkDayCompletionLevel(personKey, dateStr) {
+  const day = (wkEntries[personKey] || {})[dateStr];
   if (!day) return -1;
   let n = 0;
   CATS.forEach(([k]) => { if (day[k]) n++; });
   return n;
 }
 
-function renderHeatmap(personKey, weekMonday) {
+function wkRenderHeatmap(personKey, weekMonday) {
   let html = '<div class="heatmap">';
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
     const ds = dstr(d);
-    const level = dayCompletionLevel(personKey, ds);
+    const level = wkDayCompletionLevel(personKey, ds);
     const heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
     const title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
     html += `<div class="heat-day" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
@@ -417,13 +626,13 @@ function renderHeatmap(personKey, weekMonday) {
   return html;
 }
 
-function renderAll() {
-  renderThisWeek();
-  renderHistory();
+function wkRenderAll() {
+  wkRenderThisWeek();
+  wkRenderHistory();
 }
 
-function renderThisWeek() {
-  const monday = viewedWeekMonday;
+function wkRenderThisWeek() {
+  const monday = wkViewedWeekMonday;
   const nowMonday = getMonday(new Date());
   const isCurrentWeek = monday.getTime() === nowMonday.getTime();
   const daysElapsed = monday.getTime() < nowMonday.getTime()
@@ -445,11 +654,11 @@ function renderThisWeek() {
   document.getElementById('prevWeekBtn').style.cursor = isEarliestWeek ? 'default' : 'pointer';
 
   const wrap = document.getElementById('weekCols');
-  const thresholds = thresholdsForWeek(monday);
+  const thresholds = wkThresholdsForWeek(monday);
 
   wrap.innerHTML = ['p1','p2'].map(pk => {
-    const name = pk==='p1' ? settings.p1 : settings.p2;
-    const counts = catCountsForWeek(pk, monday);
+    const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
+    const counts = wkCatCountsForWeek(pk, monday);
     let fine = false;
     const rows = CATS.map(([key,label]) => {
       const threshold = thresholds[key];
@@ -463,35 +672,35 @@ function renderThisWeek() {
     }).join('');
     return `<div class="week-col">
       <div class="pname" style="color:var(--${pk})">${name}</div>
-      ${renderHeatmap(pk, monday)}
+      ${wkRenderHeatmap(pk, monday)}
       ${rows}
       <div class="fine-line"><span>Fine this week</span><span class="fine-tag ${fine?'yes':'no'}">${fine?'Yes':'No'}</span></div>
     </div>`;
   }).join('');
 }
 
-function allWeekKeys() {
+function wkAllWeekKeys() {
   const keys = new Set();
   ['p1','p2'].forEach(pk => {
-    Object.keys(entries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
+    Object.keys(wkEntries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
   });
   return Array.from(keys).filter(k => k >= EARLIEST_VISIBLE_WEEK).sort().reverse();
 }
 
-function renderHistory() {
-  const viewedWeekKey = dstr(viewedWeekMonday);
+function wkRenderHistory() {
+  const viewedWeekKey = dstr(wkViewedWeekMonday);
   const nowWeekKey = dstr(getMonday(new Date()));
-  const weeks = allWeekKeys().filter(w => w !== viewedWeekKey && w !== nowWeekKey);
+  const weeks = wkAllWeekKeys().filter(w => w !== viewedWeekKey && w !== nowWeekKey);
   const list = document.getElementById('historyList');
   if (weeks.length === 0) { list.innerHTML = '<div class="empty">No completed weeks yet</div>'; return; }
 
   list.innerHTML = weeks.map(wk => {
     const monday = parseDate(wk);
     const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
-    const thresholds = thresholdsForWeek(monday);
+    const thresholds = wkThresholdsForWeek(monday);
     const rows = ['p1','p2'].map(pk => {
-      const name = pk==='p1' ? settings.p1 : settings.p2;
-      const counts = catCountsForWeek(pk, monday);
+      const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
+      const counts = wkCatCountsForWeek(pk, monday);
       const missed = CATS.filter(([k]) => counts[k] < thresholds[k]).map(([k,l])=>l+' ('+counts[k]+'/'+thresholds[k]+')');
       const fine = missed.length > 0;
       const detail = missed.length ? 'missed: ' + missed.join(', ') : 'all categories met';
@@ -508,57 +717,1205 @@ function renderHistory() {
   }).join('');
 }
 
-document.querySelectorAll('.goal-row').forEach(row => {
+document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
   row.addEventListener('click', (evt) => {
     if (evt.target.tagName !== 'INPUT') { const cb = row.querySelector('input'); cb.checked = !cb.checked; }
-    updateRowStyles();
+    wkUpdateRowStyles();
   });
 });
 
-document.getElementById('saveBtn').addEventListener('click', saveDay);
+document.getElementById('saveBtn').addEventListener('click', wkSaveDay);
 document.getElementById('prevWeekBtn').addEventListener('click', () => {
-  if (dstr(viewedWeekMonday) <= EARLIEST_VISIBLE_WEEK) return;
-  viewedWeekMonday.setDate(viewedWeekMonday.getDate() - 7);
-  renderAll();
+  if (dstr(wkViewedWeekMonday) <= EARLIEST_VISIBLE_WEEK) return;
+  wkViewedWeekMonday.setDate(wkViewedWeekMonday.getDate() - 7);
+  wkRenderAll();
 });
 document.getElementById('nextWeekBtn').addEventListener('click', () => {
   const nowMonday = getMonday(new Date());
-  if (viewedWeekMonday.getTime() >= nowMonday.getTime()) return;
-  viewedWeekMonday.setDate(viewedWeekMonday.getDate() + 7);
-  renderAll();
+  if (wkViewedWeekMonday.getTime() >= nowMonday.getTime()) return;
+  wkViewedWeekMonday.setDate(wkViewedWeekMonday.getDate() + 7);
+  wkRenderAll();
 });
-document.getElementById('datePicker').addEventListener('change', loadCheckboxesForDate);
-['p1Name','p2Name','thNutrition','thScreen','thSport'].forEach(id => {
-  document.getElementById(id).addEventListener('change', saveSettings);
+document.getElementById('wkDatePicker').addEventListener('change', wkLoadCheckboxesForDate);
+['thNutrition','thScreen','thSport'].forEach(id => {
+  document.getElementById(id).addEventListener('change', wkSaveThresholds);
 });
-document.getElementById('syncCode').addEventListener('change', onSyncCodeChange);
 
-document.getElementById('resetBtn').addEventListener('click', async () => {
-  if (!confirm('Clear all tracked data for both people? This cannot be undone.')) return;
+document.getElementById('wkResetBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all tracked weekly data for both people? This cannot be undone.')) return;
   const pw = prompt('Enter password to confirm:');
   if (pw !== 'admin') { alert('Incorrect password.'); return; }
-  entries = {};
-  weeklyThresholds = {};
+  wkEntries = {};
+  wkWeeklyThresholds = {};
   try { localStorage.removeItem('entries'); } catch (err) {}
   try { localStorage.removeItem('weeklyThresholds'); } catch (err) {}
-  loadCheckboxesForDate();
-  renderAll();
-  pushToCloud({ replace: true });
+  wkLoadCheckboxesForDate();
+  wkRenderAll();
+  wkPushToCloud({ replace: true });
 });
 
-function setSetupCollapsed(collapsed) {
-  document.getElementById('setupBody').classList.toggle('collapsed', collapsed);
-  document.getElementById('setupArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
-  try { localStorage.setItem('setupCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+function wkLoadData() {
+  try { wkEntries = JSON.parse(localStorage.getItem('entries') || '{}'); } catch (err) { wkEntries = {}; }
+  try {
+    const s = localStorage.getItem('settings');
+    if (s) { const parsed = JSON.parse(s); wkThresholds = parsed.thresholds || wkThresholds; }
+  } catch (err) {}
+  try { wkWeeklyThresholds = JSON.parse(localStorage.getItem('weeklyThresholds') || '{}'); } catch (err) { wkWeeklyThresholds = {}; }
+
+  document.getElementById('thNutrition').value = wkThresholds.nutrition;
+  document.getElementById('thScreen').value = wkThresholds.screen;
+  document.getElementById('thSport').value = wkThresholds.sport;
+  document.getElementById('wkDatePicker').value = todayStr();
+  document.getElementById('wkDatePicker').max = todayStr();
+
+  wkViewedWeekMonday = getMonday(new Date());
+
+  wkRenderPersonTabs();
+  wkLoadCheckboxesForDate();
+  wkRenderAll();
 }
-document.getElementById('setupToggle').addEventListener('click', () => {
-  setSetupCollapsed(!document.getElementById('setupBody').classList.contains('collapsed'));
+
+/* ===================== CALORIE TRACKER ===================== */
+
+let calEntries = {};
+let calGoals = { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, protein: 120 } };
+let calFoodBank = [];
+let calActivePerson = 'p1';
+let calViewedMonth = null;
+let calUnsub = null;
+let calApplyingRemote = false;
+
+function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
+
+function calApplyRemoteData(data) {
+  calApplyingRemote = true;
+  calEntries = data.entries || {};
+  if (data.settings) {
+    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
+    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+    calGoals = data.settings.goals || calGoals;
+  }
+  calFoodBank = data.foodBank || [];
+  applySharedSettingsToInputs();
+  calPopulateGoalsInputs();
+  try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+  try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+  calRenderPersonTabs();
+  calRenderAll();
+  calApplyingRemote = false;
+}
+
+function calSubscribeToCloud(code) {
+  if (calUnsub) { calUnsub(); calUnsub = null; }
+  if (!code) return;
+  ensureAuth().then(() => {
+    const ref = doc(db, 'calories', code);
+    calUnsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        calApplyRemoteData(snap.data());
+      } else {
+        calPushToCloud({ replace: true });
+      }
+      markSynced();
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error (calories): ' + err.message);
+    });
+  });
+}
+
+async function calPushToCloud(opts = {}) {
+  if (!coupleCode || calApplyingRemote) return;
+  try {
+    await ensureAuth();
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'calories', coupleCode), {
+      entries: calEntries,
+      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
+      foodBank: calFoodBank
+    }, writeOpts);
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (calories): could not save');
+  }
+}
+
+function calPopulateGoalsInputs() {
+  document.getElementById('p1CalGoal').value = calGoals.p1.calories;
+  document.getElementById('p1ProtGoal').value = calGoals.p1.protein;
+  document.getElementById('p2CalGoal').value = calGoals.p2.calories;
+  document.getElementById('p2ProtGoal').value = calGoals.p2.protein;
+}
+
+async function calSaveGoals() {
+  calGoals = {
+    p1: {
+      calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
+      protein: parseInt(document.getElementById('p1ProtGoal').value) || 0
+    },
+    p2: {
+      calories: parseInt(document.getElementById('p2CalGoal').value) || 0,
+      protein: parseInt(document.getElementById('p2ProtGoal').value) || 0
+    }
+  };
+  try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
+  calRenderPersonTabs();
+  calRenderAll();
+  calPushToCloud();
+}
+
+function calRenderPersonTabs() {
+  const tabs = document.getElementById('calPersonTabs');
+  tabs.innerHTML = `
+    <button data-p="p1" class="${calActivePerson==='p1'?'active':''}">${sharedSettings.p1}</button>
+    <button data-p="p2" class="${calActivePerson==='p2'?'active':''}">${sharedSettings.p2}</button>
+  `;
+  tabs.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      calActivePerson = b.dataset.p;
+      calRenderPersonTabs();
+      calRenderLogCard();
+    });
+  });
+}
+
+function calSelectedDate() { return document.getElementById('calDatePicker').value || todayStr(); }
+
+function calDayItems(person, dateStr) {
+  return ((calEntries[person] || {})[dateStr] || {}).items || [];
+}
+
+function calDayTotals(person, dateStr) {
+  const items = calDayItems(person, dateStr);
+  return items.reduce((t, it) => ({
+    calories: t.calories + (it.calories||0),
+    protein: t.protein + (it.protein||0),
+    carbs: t.carbs + (it.carbs||0),
+    fat: t.fat + (it.fat||0)
+  }), { calories:0, protein:0, carbs:0, fat:0 });
+}
+
+let calActiveBankEntry = null;
+let calCurrentMatches = [];
+let calDropdownIndex = -1;
+let calEditingIndex = -1;
+
+function calClearManualFields() {
+  document.getElementById('foodSearchInput').value = '';
+  document.getElementById('foodCalories').value = '';
+  document.getElementById('foodProtein').value = '';
+  document.getElementById('foodCarbs').value = '';
+  document.getElementById('foodFat').value = '';
+  calActiveBankEntry = null;
+  calEditingIndex = -1;
+  document.getElementById('addItemBtn').textContent = 'Add to log';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  calApplyUnit('gram');
+  document.getElementById('bankStatus').textContent = '';
+  calCloseDropdown();
+}
+
+function calNormName(s) { return (s || '').trim().toLowerCase(); }
+
+// A typed name may be "English", "Deutsch", or "English / Deutsch" (as inserted when picking a dropdown suggestion).
+function calNameParts(name) { return (name || '').split('/').map(s => calNormName(s)).filter(Boolean); }
+
+function calFindInBank(name) {
+  const parts = calNameParts(name);
+  if (parts.length === 0) return null;
+  return calFoodBank.find(f => parts.includes(calNormName(f.en)) || parts.includes(calNormName(f.de))) || null;
+}
+
+function calSearchBank(query) {
+  const n = calNormName(query);
+  if (!n) return [];
+  return calFoodBank.filter(f => calNormName(f.en).includes(n) || calNormName(f.de).includes(n)).slice(0, 8);
+}
+
+function calUpdateAmountLabel() {
+  const unit = document.getElementById('foodUnit').value;
+  document.getElementById('foodAmountLabel').textContent = unit === 'piece' ? 'Quantity (pieces/servings)' : 'Grams';
+}
+
+// Sets the unit select + resets the amount field to a sensible default for that unit (1 piece / 100g).
+function calApplyUnit(unit) {
+  document.getElementById('foodUnit').value = unit;
+  const amount = unit === 'piece' ? 1 : 100;
+  document.getElementById('foodGrams').value = amount;
+  calUpdateAmountLabel();
+  return amount;
+}
+
+function calCloseDropdown() {
+  const dd = document.getElementById('foodNameDropdown');
+  dd.classList.remove('open');
+  dd.innerHTML = '';
+  calCurrentMatches = [];
+  calDropdownIndex = -1;
+}
+
+function calUpdateDropdownHighlight() {
+  const dd = document.getElementById('foodNameDropdown');
+  dd.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+    el.classList.toggle('active', i === calDropdownIndex);
+    if (i === calDropdownIndex) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+// entry.gram / entry.piece hold {calories,protein,carbs,fat} reference values
+// for 100g or 1 piece respectively. Either may be missing.
+function calFillFromBankEntry(entry, unit, amount) {
+  const ref = entry[unit];
+  const statusEl = document.getElementById('bankStatus');
+  if (!ref) {
+    statusEl.textContent = '"' + entry.en + ' / ' + entry.de + '" has no ' + (unit === 'piece' ? 'per-piece' : 'per-gram') + ' data yet — enter values manually and it’ll be saved for next time.';
+    return;
+  }
+  const factor = unit === 'piece' ? (amount || 0) : (amount || 0) / 100;
+  document.getElementById('foodCalories').value = Math.round(ref.calories * factor);
+  document.getElementById('foodProtein').value = Math.round(ref.protein * factor * 10) / 10;
+  document.getElementById('foodCarbs').value = Math.round(ref.carbs * factor * 10) / 10;
+  document.getElementById('foodFat').value = Math.round(ref.fat * factor * 10) / 10;
+  statusEl.textContent = '✓ Using "' + entry.en + ' / ' + entry.de + '" — auto-filled for ' + amount + (unit === 'piece' ? ' piece(s).' : 'g.');
+}
+
+function calSelectBankEntry(entry) {
+  document.getElementById('foodSearchInput').value = entry.en + ' / ' + entry.de;
+  calActiveBankEntry = entry;
+  const amount = calApplyUnit(entry.preferredUnit);
+  calFillFromBankEntry(entry, entry.preferredUnit, amount);
+  calCloseDropdown();
+}
+
+function calRenderDropdown(matches) {
+  calCurrentMatches = matches;
+  calDropdownIndex = -1;
+  const dd = document.getElementById('foodNameDropdown');
+  if (matches.length === 0) { calCloseDropdown(); return; }
+  dd.innerHTML = matches.map((f, i) => `<div class="autocomplete-item" data-i="${i}">${f.en} <span class="ai-sub">/ ${f.de}</span></div>`).join('');
+  dd.classList.add('open');
+  dd.querySelectorAll('.autocomplete-item').forEach(el => {
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); calSelectBankEntry(calCurrentMatches[parseInt(el.dataset.i)]); });
+  });
+}
+
+function calOnFoodSearchKeydown(e) {
+  const dd = document.getElementById('foodNameDropdown');
+  const isOpen = dd.classList.contains('open');
+  if (e.key === 'ArrowDown') {
+    if (!isOpen || calCurrentMatches.length === 0) return;
+    e.preventDefault();
+    calDropdownIndex = Math.min(calDropdownIndex + 1, calCurrentMatches.length - 1);
+    calUpdateDropdownHighlight();
+  } else if (e.key === 'ArrowUp') {
+    if (!isOpen || calCurrentMatches.length === 0) return;
+    e.preventDefault();
+    calDropdownIndex = Math.max(calDropdownIndex - 1, 0);
+    calUpdateDropdownHighlight();
+  } else if (e.key === 'Enter') {
+    if (isOpen && calDropdownIndex >= 0 && calCurrentMatches[calDropdownIndex]) {
+      e.preventDefault();
+      calSelectBankEntry(calCurrentMatches[calDropdownIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    calCloseDropdown();
+  }
+}
+
+function calOnFoodNameInput() {
+  const name = document.getElementById('foodSearchInput').value;
+  calActiveBankEntry = null;
+  const exact = calFindInBank(name);
+  const statusEl = document.getElementById('bankStatus');
+  if (exact) {
+    calActiveBankEntry = exact;
+    const amount = calApplyUnit(exact.preferredUnit);
+    calFillFromBankEntry(exact, exact.preferredUnit, amount);
+    calCloseDropdown();
+  } else {
+    statusEl.textContent = name.trim() ? 'Not in your food bank yet — enter values manually or search Google, and it’ll be saved for next time.' : '';
+    calRenderDropdown(calSearchBank(name));
+  }
+}
+
+// User is typing a custom amount — recompute macros but leave their typed number alone.
+function calOnGramsFieldInput() {
+  if (calActiveBankEntry) {
+    const unit = document.getElementById('foodUnit').value;
+    const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
+    calFillFromBankEntry(calActiveBankEntry, unit, amount);
+  }
+}
+
+// User manually flipped the unit dropdown — reset the amount to a sensible default for that unit.
+function calOnUnitChange() {
+  const unit = document.getElementById('foodUnit').value;
+  const amount = calApplyUnit(unit);
+  if (calActiveBankEntry) calFillFromBankEntry(calActiveBankEntry, unit, amount);
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#foodSearchInput') && !e.target.closest('#foodNameDropdown')) calCloseDropdown();
 });
+
+function calSearchOnGoogle() {
+  const name = document.getElementById('foodSearchInput').value.trim().split('/')[0].trim();
+  if (!name) { alert('Enter a food name first.'); return; }
+  const amount = document.getElementById('foodGrams').value || '100';
+  const unit = document.getElementById('foodUnit').value;
+  const q = unit === 'piece' ? `${name} calories protein per piece` : `${name} calories protein per ${amount}g`;
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
+}
+
+function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat) {
+  if (!amount || amount <= 0) return;
+  const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
+  const refData = {
+    calories: Math.round(calories * factor),
+    protein: Math.round(protein * factor * 10) / 10,
+    carbs: Math.round(carbs * factor * 10) / 10,
+    fat: Math.round(fat * factor * 10) / 10
+  };
+  let entry = calFindInBank(name);
+  if (entry) {
+    entry[unit] = refData;
+    entry.preferredUnit = unit;
+  } else {
+    const parts = name.split('/').map(s => s.trim()).filter(Boolean);
+    const en = parts[0] || name;
+    const de = parts[1] || parts[0] || name;
+    entry = { en, de, preferredUnit: unit, gram: null, piece: null };
+    entry[unit] = refData;
+    calFoodBank.push(entry);
+  }
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+}
+
+async function calAddItem() {
+  const name = document.getElementById('foodSearchInput').value.trim();
+  if (!name) { alert('Enter a food name.'); return; }
+  const nameEn = name.split('/')[0].trim();
+  const unit = document.getElementById('foodUnit').value;
+  const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
+  const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
+  const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
+  const carbs = parseFloat(document.getElementById('foodCarbs').value) || 0;
+  const fat = parseFloat(document.getElementById('foodFat').value) || 0;
+  const ds = calSelectedDate();
+  if (!calEntries[calActivePerson]) calEntries[calActivePerson] = {};
+  if (!calEntries[calActivePerson][ds]) calEntries[calActivePerson][ds] = { items: [] };
+  const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat };
+  const items = calEntries[calActivePerson][ds].items;
+  if (calEditingIndex >= 0 && items[calEditingIndex]) {
+    items[calEditingIndex] = newItem;
+  } else {
+    items.push(newItem);
+  }
+  calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat);
+  try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+  calClearManualFields();
+  calRenderLogCard();
+  calRenderMonth();
+  calPushToCloud();
+}
+
+function calDeleteItem(index) {
+  const ds = calSelectedDate();
+  const items = calDayItems(calActivePerson, ds);
+  items.splice(index, 1);
+  if (calEditingIndex === index) calClearManualFields();
+  try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+  calRenderLogCard();
+  calRenderMonth();
+  calPushToCloud();
+}
+
+function calEditItem(index) {
+  const ds = calSelectedDate();
+  const item = calDayItems(calActivePerson, ds)[index];
+  if (!item) return;
+  const bankEntry = calFindInBank(item.name);
+  calActiveBankEntry = bankEntry;
+  document.getElementById('foodSearchInput').value = bankEntry ? (bankEntry.en + ' / ' + bankEntry.de) : item.name;
+  document.getElementById('foodUnit').value = item.unit;
+  calUpdateAmountLabel();
+  document.getElementById('foodGrams').value = item.grams;
+  document.getElementById('foodCalories').value = item.calories;
+  document.getElementById('foodProtein').value = item.protein;
+  document.getElementById('foodCarbs').value = item.carbs;
+  document.getElementById('foodFat').value = item.fat;
+  calEditingIndex = index;
+  document.getElementById('addItemBtn').textContent = 'Update log entry';
+  document.getElementById('cancelEditBtn').style.display = 'block';
+  document.getElementById('bankStatus').textContent = 'Editing this entry — adjust values, then Update (or Cancel).';
+  calCloseDropdown();
+}
+
+function calRenderLogCard() {
+  const ds = calSelectedDate();
+  const items = calDayItems(calActivePerson, ds);
+  const listEl = document.getElementById('foodItemsList');
+  listEl.innerHTML = items.length === 0
+    ? '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>'
+    : items.map((it, i) => `<div class="food-item">
+        <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
+        <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g P · ${Math.round(it.carbs)}g C · ${Math.round(it.fat)}g F</span>
+        <button class="fi-edit" data-i="${i}">&#9998;</button>
+        <button class="fi-del" data-i="${i}">&times;</button>
+      </div>`).join('');
+  listEl.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => calEditItem(parseInt(btn.dataset.i)));
+  });
+  listEl.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => calDeleteItem(parseInt(btn.dataset.i)));
+  });
+
+  const totals = calDayTotals(calActivePerson, ds);
+  const goal = calGoals[calActivePerson];
+  const calMet = totals.calories <= goal.calories;
+  const protMet = totals.protein >= goal.protein;
+  document.getElementById('totalsLine').innerHTML = `
+    <div class="totals-row"><span class="tname">Calories</span><span><span class="count">${Math.round(totals.calories)}/${goal.calories}</span><span class="status ${calMet?'met':'missed'}">${calMet?'On track':'Over'}</span></span></div>
+    <div class="totals-row"><span class="tname">Protein</span><span><span class="count">${Math.round(totals.protein)}/${goal.protein}g</span><span class="status ${protMet?'met':'missed'}">${protMet?'Met':'Under'}</span></span></div>
+    <div class="totals-row"><span class="tname">Carbs</span><span><span class="count">${Math.round(totals.carbs)}g</span></span></div>
+    <div class="totals-row"><span class="tname">Fat</span><span><span class="count">${Math.round(totals.fat)}g</span></span></div>
+  `;
+}
+
+function calBuildMonthGrid(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const cells = [];
+  for (let i=0;i<startOffset;i++) cells.push(null);
+  for (let d=1; d<=daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+function calDayStatus(person, dateStr) {
+  const items = calDayItems(person, dateStr);
+  if (items.length === 0) return 'none';
+  const totals = calDayTotals(person, dateStr);
+  const goal = calGoals[person];
+  const calOk = totals.calories <= goal.calories;
+  const protOk = totals.protein >= goal.protein;
+  return (calOk && protOk) ? 'good' : 'bad';
+}
+
+function calRenderMonth() {
+  const year = calViewedMonth.getFullYear();
+  const month = calViewedMonth.getMonth();
+  document.getElementById('monthLabel').textContent = calViewedMonth.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  document.getElementById('nextMonthBtn').disabled = isCurrentMonth;
+  document.getElementById('nextMonthBtn').style.opacity = isCurrentMonth ? 0.4 : 1;
+  document.getElementById('nextMonthBtn').style.cursor = isCurrentMonth ? 'default' : 'pointer';
+
+  const cells = calBuildMonthGrid(year, month);
+  const wrap = document.getElementById('monthCols');
+  wrap.innerHTML = ['p1','p2'].map(pk => {
+    const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
+    const squares = cells.map(d => {
+      if (d === null) return '<div class="month-day blank"></div>';
+      const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const status = calDayStatus(pk, ds);
+      const totals = calDayTotals(pk, ds);
+      const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein';
+      return `<div class="month-day ${status}" title="${title}"></div>`;
+    }).join('');
+    return `<div class="month-col">
+      <div class="pname" style="color:var(--${pk})">${name}</div>
+      <div class="month-grid">${squares}</div>
+    </div>`;
+  }).join('');
+}
+
+function calRenderAll() {
+  calRenderLogCard();
+  calRenderMonth();
+}
+
+function calLoadData() {
+  try { calEntries = JSON.parse(localStorage.getItem('calorie_entries') || '{}'); } catch (err) { calEntries = {}; }
+  try {
+    const s = localStorage.getItem('calorie_settings');
+    if (s) { const parsed = JSON.parse(s); calGoals = parsed.goals || calGoals; }
+  } catch (err) {}
+  try { calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { calFoodBank = []; }
+
+  calPopulateGoalsInputs();
+  document.getElementById('calDatePicker').value = todayStr();
+  document.getElementById('calDatePicker').max = todayStr();
+
+  const now = new Date();
+  calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  calRenderPersonTabs();
+  calRenderAll();
+}
+
+document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
+document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
+document.getElementById('foodGrams').addEventListener('input', calOnGramsFieldInput);
+document.getElementById('foodUnit').addEventListener('change', calOnUnitChange);
+document.getElementById('googleSearchBtn').addEventListener('click', calSearchOnGoogle);
+document.getElementById('addItemBtn').addEventListener('click', calAddItem);
+document.getElementById('cancelEditBtn').addEventListener('click', calClearManualFields);
+document.getElementById('calDatePicker').addEventListener('change', calRenderLogCard);
+
+['p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal'].forEach(id => {
+  document.getElementById(id).addEventListener('change', calSaveGoals);
+});
+
+document.getElementById('prevMonthBtn').addEventListener('click', () => {
+  calViewedMonth = new Date(calViewedMonth.getFullYear(), calViewedMonth.getMonth() - 1, 1);
+  calRenderMonth();
+});
+document.getElementById('nextMonthBtn').addEventListener('click', () => {
+  const now = new Date();
+  const nowMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (calViewedMonth.getTime() >= nowMonthStart.getTime()) return;
+  calViewedMonth = new Date(calViewedMonth.getFullYear(), calViewedMonth.getMonth() + 1, 1);
+  calRenderMonth();
+});
+
+document.getElementById('calResetBtn').addEventListener('click', async () => {
+  if (!confirm('Clear all logged food for both people? This cannot be undone.')) return;
+  calEntries = {};
+  try { localStorage.removeItem('calorie_entries'); } catch (err) {}
+  calRenderAll();
+  calPushToCloud({ replace: true });
+});
+
+/* ===================== TRAINING PLAN ===================== */
+
+const DAY_ORDER = ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'];
+const DAY_LABELS_TR = { overview: 'Overview', day1: 'Day 1', day2: 'Day 2', day3: 'Day 3', day4: 'Day 4', day5: 'Day 5', backcare: 'Back care' };
+
+const PLAN_P1 = {
+  dayOrder: ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'],
+  overview: {
+    goal: 'Upper-body focus while maintaining lower body, muscle maintenance/build + fat loss, better conditioning, compatible with playing tennis on unpredictable days.',
+    rules: [
+      'Tennis days vary week to week, so this is a <strong>rotation, not a fixed weekly calendar</strong> — do the 5 days in any order that fits your week.',
+      '<strong>Played tennis today or yesterday?</strong> Skip Day 3 (legs) or Day 5 (conditioning) that session — do an upper day instead. Tennis already loads legs and cardio hard.',
+      '<strong>Avoid two upper days back-to-back</strong> where possible, so shoulders and elbows get at least a day between sessions.',
+      '<strong>Every upper day opens with 5 minutes of rotator cuff / shoulder prehab</strong> — serves and overhead shots load the same joints as pressing.'
+    ],
+    frequency: [
+      ['Chest', 'Day 1, Day 4', '2x'],
+      ['Shoulders', 'Day 1, Day 4 (+ light touch Day 5)', '2-3x'],
+      ['Back', 'Day 2, Day 4 (+ Day 5)', '2-3x'],
+      ['Biceps/triceps', 'Day 1, Day 2/4', '2x'],
+      ['Legs', 'Day 3 only (+ light touch Day 5)', '1x direct']
+    ],
+    notes: [
+      '<strong>Fat loss</strong> comes primarily from nutrition — this training preserves/builds muscle and adds conditioning volume, but the calorie deficit is what drives fat loss.',
+      '<strong>Progression:</strong> aim to add a little weight or 1-2 reps per exercise every 1-2 weeks. If you stall for 2+ sessions in a row, hold the weight and focus on form/tempo before pushing again.',
+      '<strong>Med-ball rotational throws and rotational cable chops</strong> double as tennis-specific power work — they mimic trunk rotation used in groundstrokes and serves.'
+    ]
+  },
+  day1: {
+    title: 'Upper: push strength',
+    duration: '45 min',
+    gym: [
+      ['Rotator cuff prehab (external rotation)', '3x15', 'https://www.muscleandstrength.com/exercises/cable-external-rotation'],
+      ['Barbell bench press', '4x6-8', 'https://www.muscleandstrength.com/exercises/barbell-bench-press.html'],
+      ['Overhead press', '3x8-10', 'https://www.muscleandstrength.com/exercises/military-press.html'],
+      ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Cable lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-cable-lateral-raise.html'],
+      ['Triceps rope pushdown', '3x12-15', 'https://www.muscleandstrength.com/exercises/rope-tricep-extension.html']
+    ],
+    home: [
+      ['Dumbbell external rotation', '3x15', 'https://www.muscleandstrength.com/exercises/bench-supported-dumbbell-external-rotation'],
+      ['Dumbbell bench press (floor press if no bench)', '4x8-10', 'https://www.muscleandstrength.com/exercises/dumbbell-floor-press.html'],
+      ['Dumbbell shoulder press', '3x8-10', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Dumbbell close-grip floor press', '3x10-12', 'https://www.muscleandstrength.com/exercises/close-grip-dumbbell-press.html'],
+      ['Dumbbell lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Dumbbell overhead triceps extension', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-dumbbell-extension.html']
+    ]
+  },
+  day2: {
+    title: 'Upper: pull strength',
+    duration: '45 min',
+    gym: [
+      ['Rotator cuff prehab (band pull-apart)', '3x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
+      ['Weighted pull-ups / lat pulldown', '4x8-10', 'https://www.muscleandstrength.com/exercises/lat-pull-down.html'],
+      ['Seated cable row', '3x10-12', 'https://www.muscleandstrength.com/exercises/seated-row.html'],
+      ['Chest-supported dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Wrist extensor curls (elbow health)', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
+    ],
+    home: [
+      ['Dumbbell reverse fly (light, slow)', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Heavy single-arm dumbbell row (main pull movement)', '4x8-10/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Two-arm bent-over dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-row.html'],
+      ['Chest-supported row lying face-down on a bench', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Dumbbell reverse fly, wide grip', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Dumbbell wrist extension', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
+    ],
+    footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows.'
+  },
+  day3: {
+    title: 'Lower body + rotational core',
+    duration: '40 min',
+    gym: [
+      ['Goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
+      ['Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
+      ['Bulgarian split squat', '3x10/leg', 'https://www.muscleandstrength.com/exercises/one-leg-dumbbell-squat-aka-bulgarian-squat.html'],
+      ['Lateral lunges', '3x10/side', 'https://www.muscleandstrength.com/exercises/dumbbell-side-lunge.html'],
+      ['Standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-calf-raise.html'],
+      ['Rotational cable chop', '3x12/side', 'https://www.muscleandstrength.com/exercises/wood-chop.html']
+    ],
+    home: [
+      ['Dumbbell goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
+      ['Dumbbell Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
+      ['Dumbbell Bulgarian split squat (rear foot on a chair/bench)', '3x10/leg', 'https://www.muscleandstrength.com/exercises/one-leg-dumbbell-squat-aka-bulgarian-squat.html'],
+      ['Dumbbell lateral lunges', '3x10/side', 'https://www.muscleandstrength.com/exercises/dumbbell-side-lunge.html'],
+      ['Dumbbell standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-one-leg-calf-raise-with-dumbbell.html'],
+      ['Single dumbbell diagonal woodchop', '3x12/side', 'https://www.muscleandstrength.com/exercises/wood-chop.html']
+    ]
+  },
+  day4: {
+    title: 'Upper: hypertrophy + finisher',
+    duration: '45-50 min',
+    gym: [
+      ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Single-arm lat pulldown', '3x10-12/side', 'https://www.youtube.com/watch?v=eM162KNncD8'],
+      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Hammer curl + skull crusher (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/standing-hammer-curl.html'],
+      ['Interval finisher (bike/row)', '10-12 min', null]
+    ],
+    home: [
+      ['Dumbbell incline press (feet elevated, or bench)', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Single-arm dumbbell row, underhand grip', '3x10-12/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Hammer curl + lying dumbbell triceps extension (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/lying-dumbbell-extension.html'],
+      ['Interval finisher: burpees, jump rope, or stair sprints', '10-12 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
+    ]
+  },
+  day5: {
+    title: 'Full body metabolic + conditioning',
+    duration: '35-40 min',
+    gym: [
+      ['Kettlebell swings', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
+      ['Push press', '3x8', 'https://www.muscleandstrength.com/exercises/push-press'],
+      ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
+      ['Med-ball rotational throws', '3x10/side', 'https://www.muscleandstrength.com/exercises/rotational-med-ball-throw'],
+      ['Circuit: sled push / battle ropes / bike sprints', '15 min', null]
+    ],
+    home: [
+      ['Single dumbbell swing (hinge, swing between legs)', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
+      ['Dumbbell push press', '3x8', 'https://www.youtube.com/watch?v=B6EOz_LwRqU'],
+      ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
+      ['Weighted Russian twists', '3x15/side', 'https://www.muscleandstrength.com/exercises/weighted-side-touches.html'],
+      ['Bodyweight circuit: burpees, jump squats, mountain climbers, high knees', '15 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
+    ]
+  },
+  backcare: {
+    intro: 'Tennis loads the lower back through rotation, serving (extension), and lateral movement — if it\'s tight or achy afterward, that\'s usually the surrounding muscles (core, glutes, hips) not doing their share. This builds that support without adding more spinal load. This is general supportive work, not treatment — if pain is sharp, radiates down a leg, comes with numbness/tingling, or persists or worsens over a few days, see a doctor or physiotherapist.',
+    sections: [
+      {
+        title: 'Pre-tennis warm-up (5 min, before you play)',
+        items: [
+          ['Cat-cow', '10 reps', 'https://www.youtube.com/watch?v=y_cKHKi9UaM'],
+          ['Kneeling hip flexor stretch', '30s/side', 'https://www.youtube.com/watch?v=Q4Ko275cluo'],
+          ['90/90 hip rotations', '8/side', 'https://www.youtube.com/watch?v=f_7qIPxw6nE'],
+          ['Glute bridge', '12 reps', 'https://www.muscleandstrength.com/exercises/bodyweight-glute-bridge']
+        ]
+      },
+      {
+        title: 'Core stability block (2-3x/week, e.g. after Day 3 or Day 5)',
+        items: [
+          ['Dead bug', '3x10/side', 'https://www.muscleandstrength.com/exercises/dead-bug'],
+          ['Bird dog', '3x8/side', 'https://www.muscleandstrength.com/exercises/contralateral-bird-dog'],
+          ['Side plank', '3x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html'],
+          ['Pallof press (band or cable)', '3x10/side', 'https://www.muscleandstrength.com/exercises/pallof-press'],
+          ['Single-leg glute bridge', '3x12/side', 'https://www.muscleandstrength.com/exercises/single-leg-glute-bridge']
+        ]
+      },
+      {
+        title: 'Post-tennis cool-down stretch (5 min, right after playing)',
+        items: [
+          ["Child's pose", '30-45s', 'https://www.youtube.com/watch?v=jaCOZJPSy2g'],
+          ['Knee-to-chest', '30s/side', 'https://www.youtube.com/watch?v=Yd9wY25koVk'],
+          ['Seated spinal twist', '30s/side', 'https://www.youtube.com/watch?v=r5JuFoNzOU8'],
+          ['Piriformis stretch (figure-4)', '30s/side', 'https://www.youtube.com/watch?v=-g0nuyTHMrI']
+        ]
+      }
+    ],
+    tightNote: 'On days the back feels tight or sore: ease off spinal-loaded moves rather than pushing through them — swap Romanian deadlift / deadlift / kettlebell swings for a goblet squat or leg press pattern that day. Keep the core stability block — it tends to help tightness rather than aggravate it. If it\'s not better within a few days, or gets worse, get it looked at.'
+  }
+};
+
+const PLAN_P2 = {
+  dayOrder: ['overview', 'day1', 'day2', 'day3', 'day4'],
+  overview: {
+    goal: 'Build muscle and lean out while directly counteracting desk-job posture (rounded shoulders, weak upper back) — 4 gym sessions (45 min) + 1 separate Hyrox session per week.',
+    rules: [
+      'Rounded shoulders from desk work come from an imbalance: chest/front-shoulder muscles get tight and overused while the upper back and rear delts get weak and stretched out. The fix is tipping the training ratio toward <strong>pulling movements over pushing movements (roughly 2:1)</strong> so the upper back has the strength to actually hold the shoulders back.',
+      '<strong>Every session includes at least one direct posture/upper-back exercise</strong>, not just on a dedicated "back day."',
+      '<strong>Day 5 is Hyrox</strong> — a separate dedicated session. Don\'t add extra volume on top of it; this plan is built around it, not competing with it.',
+      '<strong>Daily posture habit:</strong> a 30-second doorway chest stretch and a few band pull-aparts at the desk, a couple of times a day, does more for rounded shoulders over time than any single gym session.'
+    ],
+    frequency: [
+      ['Upper back / posture', 'Day 1, Day 2, Day 3 (every session)', '4x'],
+      ['Chest', 'Day 3 only', '1x (intentionally low — 2:1 pull:push ratio)'],
+      ['Shoulders', 'Day 1, Day 3', '2x'],
+      ['Glutes / posterior chain', 'Day 1, Day 2, Day 4', '3x'],
+      ['Legs (quads)', 'Day 1, Day 4', '2x'],
+      ['Core', 'Day 1, Day 3, Day 4', '3x']
+    ],
+    notes: [
+      '<strong>Progression:</strong> add a little weight or 1-2 reps per exercise every 1-2 weeks where possible. If you stall for 2 sessions in a row, hold the weight and dial in form before pushing again.',
+      '<strong>Nutrition:</strong> pairs with a target of ~1,700-1,900 kcal/day and ~115g protein — the protein target matters especially here since muscle building needs the raw material to work with.',
+      'This is a different squat and hinge pattern from Day 1 to Day 4 (front/back squat vs. goblet squat, single-leg RDL vs. bilateral RDL) so the legs get real variety instead of repeating the same movement twice a week.'
+    ]
+  },
+  day1: {
+    title: 'Full body strength + upper back',
+    duration: '45 min',
+    gym: [
+      ['Band pull-apart', '2x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
+      ['Wall slides', '2x10', 'https://www.muscleandstrength.com/exercises/scapular-wall-slide'],
+      ['Goblet squat', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
+      ['Chest-supported dumbbell row', '4x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Romanian deadlift', '3x10-12', 'https://www.muscleandstrength.com/exercises/romanian-deadlift'],
+      ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Plank', '3x30-45s', 'https://www.muscleandstrength.com/exercises/hover.html']
+    ]
+  },
+  day2: {
+    title: 'Pull + posterior chain (posture priority day)',
+    duration: '45 min',
+    gym: [
+      ['Band pull-apart', '2x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
+      ['Thoracic rotations', '8/side', 'https://www.youtube.com/watch?v=peeW19ofFUg'],
+      ['Lat pulldown or assisted pull-up', '4x8-10', 'https://www.muscleandstrength.com/exercises/lat-pull-down.html'],
+      ['Single-arm dumbbell row', '3x10-12/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
+      ['Reverse fly (rear delt)', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Hip thrust', '3x10-12', 'https://www.muscleandstrength.com/exercises/barbell-hip-thrust'],
+      ['Dumbbell bicep curl', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-curl.html']
+    ]
+  },
+  day3: {
+    title: 'Push + core stability',
+    duration: '45 min',
+    gym: [
+      ['Doorway chest stretch', '2x30s', 'https://www.youtube.com/watch?v=M850sCj9LHQ'],
+      ['Wall slides', '2x10', 'https://www.muscleandstrength.com/exercises/scapular-wall-slide'],
+      ['Dumbbell bench press or incline press', '3x10-12', 'https://www.muscleandstrength.com/exercises/dumbbell-bench-press.html'],
+      ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Dumbbell lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Dips (bench or parallel bar)', '3x10-12', 'https://www.muscleandstrength.com/exercises/tricep-dip.html'],
+      ['Side plank', '2x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html']
+    ],
+    footnote: 'Push volume here is intentionally lower than the pull volume across Days 1-2 — that\'s the 2:1 ratio doing its job for posture.'
+  },
+  day4: {
+    title: 'Lower body / hip strength',
+    duration: '45 min',
+    gym: [
+      ['Hip flexor stretch', '2x30s/side', 'https://www.youtube.com/watch?v=Q4Ko275cluo'],
+      ['Glute bridge', '2x10', 'https://www.muscleandstrength.com/exercises/bodyweight-glute-bridge'],
+      ['Front squat or back squat', '4x8-10', 'https://www.muscleandstrength.com/exercises/front-squat.html'],
+      ['Walking lunges', '3x10/leg', 'https://www.muscleandstrength.com/exercises/dumbbell-walking-lunge.html'],
+      ['Single-leg Romanian deadlift', '3x8-10/leg', 'https://www.muscleandstrength.com/exercises/single-leg-one-dumbbell-deadlift'],
+      ['Hip abduction (band or machine)', '3x15/side', 'https://www.muscleandstrength.com/exercises/hip-abduction-machine.html'],
+      ['Standing calf raise', '3x15', 'https://www.muscleandstrength.com/exercises/standing-calf-raise.html'],
+      ['Side plank', '2x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html']
+    ],
+    footnote: 'Hip abduction targets glute medius, which supports pelvis and hip stability and complements the overall posture focus — it\'s new compared to Day 1\'s leg work rather than a repeat.'
+  }
+};
+
+let trActivePerson = 'p1';
+let trActiveDay = 'overview';
+let trActiveVariant = 'gym';
+let trTrainingLog = { p1: [], p2: [] };
+let trUnsub = null;
+let trApplyingRemote = false;
+
+function trCurrentPlan() { return trActivePerson === 'p1' ? PLAN_P1 : PLAN_P2; }
+
+function trApplyRemoteData(data) {
+  trApplyingRemote = true;
+  if (data.settings) {
+    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
+    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+  }
+  trTrainingLog = data.trainingLog || { p1: [], p2: [] };
+  applySharedSettingsToInputs();
+  try { localStorage.setItem('training_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2 })); } catch (err) {}
+  try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+  trRenderAll();
+  trApplyingRemote = false;
+}
+
+function trSubscribeToCloud(code) {
+  if (trUnsub) { trUnsub(); trUnsub = null; }
+  if (!code) return;
+  ensureAuth().then(() => {
+    const ref = doc(db, 'training', code);
+    trUnsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        trApplyRemoteData(snap.data());
+      } else {
+        trPushToCloud({ replace: true });
+      }
+      markSynced();
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error (training): ' + err.message);
+    });
+  });
+}
+
+async function trPushToCloud(opts = {}) {
+  if (!coupleCode || trApplyingRemote) return;
+  try {
+    await ensureAuth();
+    const writeOpts = opts.replace ? {} : { merge: true };
+    await setDoc(doc(db, 'training', coupleCode), {
+      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
+      trainingLog: trTrainingLog
+    }, writeOpts);
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (training): could not save');
+  }
+}
+
+function trRenderPersonTabs() {
+  const el = document.getElementById('trPersonTabs');
+  el.innerHTML = `
+    <button data-p="p1" class="${trActivePerson === 'p1' ? 'active' : ''}">${sharedSettings.p1}</button>
+    <button data-p="p2" class="${trActivePerson === 'p2' ? 'active' : ''}">${sharedSettings.p2}</button>
+  `;
+  el.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      trActivePerson = b.dataset.p;
+      const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
+      if (!order.includes(trActiveDay)) trActiveDay = 'overview';
+      trActiveVariant = 'gym';
+      trRenderAll();
+    });
+  });
+}
+
+function trRenderDayTabs() {
+  const el = document.getElementById('trDayTabs');
+  const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
+  el.innerHTML = order.map(d => `<button data-d="${d}" class="${trActiveDay === d ? 'active' : ''}">${DAY_LABELS_TR[d]}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => { trActiveDay = b.dataset.d; trActiveVariant = 'gym'; trRenderContent(); trUpdateActiveTabStyles(); });
+  });
+}
+
+function trUpdateActiveTabStyles() {
+  document.querySelectorAll('#trDayTabs button').forEach(b => b.classList.toggle('active', b.dataset.d === trActiveDay));
+}
+
+function trExRow([name, reps, url]) {
+  const link = url
+    ? `<span class="ex-link"><a href="${url}" target="_blank" rel="noopener">&#9654; Watch</a></span>`
+    : '';
+  return `<div class="ex-row"><span class="ex-name">${name}</span><span class="ex-reps">${reps}</span>${link}</div>`;
+}
+
+function trRenderOverview(plan) {
+  return `
+    <h2>Overview</h2>
+    <p class="card-sub">${plan.goal}</p>
+    <div class="section-title">Flexible scheduling rules</div>
+    <ul class="rule-list">${plan.rules.map(r => `<li>${r}</li>`).join('')}</ul>
+    <div class="section-title">Muscle frequency check</div>
+    <table class="freq-table">
+      <tr><th>Muscle group</th><th>Hit on</th><th>Frequency</th></tr>
+      ${plan.frequency.map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`).join('')}
+    </table>
+    <div class="section-title">Notes</div>
+    <ul class="rule-list">${plan.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+  `;
+}
+
+function trDayLogs(person, dayKey) {
+  return (trTrainingLog[person] || []).filter(l => l.day === dayKey).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function trFindLog(person, dayKey, date, variant) {
+  return (trTrainingLog[person] || []).find(l => l.day === dayKey && l.date === date && l.variant === variant);
+}
+
+function trFindPreviousLog(person, dayKey, variant, beforeDate) {
+  const arr = (trTrainingLog[person] || [])
+    .filter(l => l.day === dayKey && l.variant === variant && l.date < beforeDate)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return arr[0] || null;
+}
+
+const trExpandedLogs = new Set();
+function trLogKey(date, variant) { return date + '|' + variant; }
+
+function trRenderLogDetail(l, prev) {
+  return Object.entries(l.weights).map(([name, w]) => {
+    let deltaHtml = '<span class="pl-ex-delta flat">first time</span>';
+    if (prev && prev.weights[name] !== undefined) {
+      const d = Math.round((w - prev.weights[name]) * 100) / 100;
+      if (d > 0) deltaHtml = `<span class="pl-ex-delta up">&#9650; +${d}kg</span>`;
+      else if (d < 0) deltaHtml = `<span class="pl-ex-delta down">&#9660; ${d}kg</span>`;
+      else deltaHtml = '<span class="pl-ex-delta flat">no change</span>';
+    }
+    return `<div class="pl-ex-row"><span class="pl-ex-name">${name}</span><span class="pl-ex-weight">${w}kg</span>${deltaHtml}</div>`;
+  }).join('');
+}
+
+function trRenderDay(day, dayKey) {
+  const hasVariants = !!(day.gym && day.home);
+  const list = hasVariants ? (trActiveVariant === 'gym' ? day.gym : day.home) : day.gym;
+  const logs = trDayLogs(trActivePerson, dayKey);
+  return `
+    <h2>${day.title}</h2>
+    <p class="card-sub">${day.duration}</p>
+    ${hasVariants ? `
+      <div class="variant-tabs">
+        <button id="variantGym" class="${trActiveVariant === 'gym' ? 'active' : ''}">Gym</button>
+        <button id="variantHome" class="${trActiveVariant === 'home' ? 'active' : ''}">Home (dumbbell)</button>
+      </div>` : ''}
+    ${list.map(trExRow).join('')}
+    ${day.footnote ? `<p class="note" style="margin-top:12px;">${day.footnote}</p>` : ''}
+
+    <div class="section-title">Log this workout</div>
+    <div class="log-date-row">
+      <label>Date</label>
+      <input type="date" id="logDate">
+    </div>
+    <div id="logWeights">
+      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
+    </div>
+    <button class="primary" id="saveLogBtn">Save log</button>
+
+    <div class="section-title" style="margin-top:20px;">Past sessions</div>
+    <div id="pastLogs">
+      ${logs.length === 0 ? '<div class="empty-state" style="padding:1rem 0;">No sessions logged yet.</div>' : logs.map(l => {
+        const key = trLogKey(l.date, l.variant);
+        const open = trExpandedLogs.has(key);
+        const prev = trFindPreviousLog(trActivePerson, dayKey, l.variant, l.date);
+        const count = Object.keys(l.weights).length;
+        return `<div class="past-log-row" data-date="${l.date}" data-variant="${l.variant}">
+          <div class="pl-header">
+            <span class="pl-chevron ${open ? 'open' : ''}">&#9656;</span>
+            <span class="pl-date">${l.date}</span>
+            <span class="pl-meta">${l.variant === 'home' ? 'Home' : 'Gym'} &middot; ${count} exercise${count === 1 ? '' : 's'}</span>
+            <button class="pl-edit" data-date="${l.date}" data-variant="${l.variant}" title="Load into form">&#9998;</button>
+            <button class="pl-del" data-date="${l.date}" data-variant="${l.variant}" title="Delete">&times;</button>
+          </div>
+          <div class="pl-detail ${open ? 'open' : ''}">${trRenderLogDetail(l, prev)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function trLoadLogIntoForm(dayKey, list, variant) {
+  const dateInput = document.getElementById('logDate');
+  const date = dateInput.value;
+  const existing = trFindLog(trActivePerson, dayKey, date, variant);
+  list.forEach((ex, i) => {
+    const input = document.getElementById('logW_' + i);
+    if (!input) return;
+    input.value = existing && existing.weights[ex[0]] !== undefined ? existing.weights[ex[0]] : '';
+  });
+}
+
+function trSaveLog(dayKey, list, variant) {
+  const date = document.getElementById('logDate').value || todayStr();
+  const weights = {};
+  list.forEach((ex, i) => {
+    const v = parseFloat(document.getElementById('logW_' + i).value);
+    if (!isNaN(v)) weights[ex[0]] = v;
+  });
+  if (Object.keys(weights).length === 0) { alert('Enter at least one weight.'); return; }
+  if (!trTrainingLog[trActivePerson]) trTrainingLog[trActivePerson] = [];
+  const arr = trTrainingLog[trActivePerson];
+  const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
+  const entry = { date, day: dayKey, variant, weights };
+  if (idx >= 0) arr[idx] = entry; else arr.push(entry);
+  try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+  trPushToCloud();
+  trRenderContent();
+}
+
+function trDeleteLog(dayKey, date, variant) {
+  const arr = trTrainingLog[trActivePerson] || [];
+  const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
+  if (idx >= 0) arr.splice(idx, 1);
+  try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+  trPushToCloud();
+  trRenderContent();
+}
+
+let trPendingViewLog = null;
+
+function trRenderBackCare(bc) {
+  return `
+    <h2>Back care</h2>
+    <p class="card-sub">${bc.intro}</p>
+    ${bc.sections.map(s => `
+      <div class="section-title">${s.title}</div>
+      ${s.items.map(trExRow).join('')}
+    `).join('')}
+    <p class="note" style="margin-top:14px;">${bc.tightNote}</p>
+  `;
+}
+
+function trRenderContent() {
+  const plan = trCurrentPlan();
+  const contentEl = document.getElementById('trContent');
+  if (!plan) {
+    contentEl.innerHTML = `<div class="empty-state">No training plan added for Partner yet.</div>`;
+    return;
+  }
+  if (trActiveDay === 'overview') {
+    contentEl.innerHTML = trRenderOverview(plan.overview);
+  } else if (trActiveDay === 'backcare') {
+    contentEl.innerHTML = trRenderBackCare(plan.backcare);
+  } else {
+    const day = plan[trActiveDay];
+    contentEl.innerHTML = trRenderDay(day, trActiveDay);
+    const gymBtn = document.getElementById('variantGym');
+    const homeBtn = document.getElementById('variantHome');
+    if (gymBtn) gymBtn.addEventListener('click', () => { trActiveVariant = 'gym'; trRenderContent(); });
+    if (homeBtn) homeBtn.addEventListener('click', () => { trActiveVariant = 'home'; trRenderContent(); });
+
+    const hasVariants = !!(day.gym && day.home);
+    const list = hasVariants ? (trActiveVariant === 'gym' ? day.gym : day.home) : day.gym;
+
+    const dateInput = document.getElementById('logDate');
+    if (dateInput) {
+      dateInput.max = todayStr();
+      dateInput.value = trPendingViewLog ? trPendingViewLog.date : todayStr();
+      trLoadLogIntoForm(trActiveDay, list, trActiveVariant);
+      dateInput.addEventListener('change', () => trLoadLogIntoForm(trActiveDay, list, trActiveVariant));
+    }
+    trPendingViewLog = null;
+
+    const saveBtn = document.getElementById('saveLogBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => trSaveLog(trActiveDay, list, trActiveVariant));
+
+    document.querySelectorAll('#trContent .pl-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        trDeleteLog(trActiveDay, btn.dataset.date, btn.dataset.variant);
+      });
+    });
+    document.querySelectorAll('#trContent .pl-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const date = btn.dataset.date;
+        const variant = btn.dataset.variant;
+        if (variant !== trActiveVariant) {
+          trActiveVariant = variant;
+          trPendingViewLog = { date };
+          trRenderContent();
+        } else {
+          document.getElementById('logDate').value = date;
+          trLoadLogIntoForm(trActiveDay, list, trActiveVariant);
+        }
+      });
+    });
+    document.querySelectorAll('#trContent .pl-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const row = header.closest('.past-log-row');
+        const key = trLogKey(row.dataset.date, row.dataset.variant);
+        if (trExpandedLogs.has(key)) trExpandedLogs.delete(key); else trExpandedLogs.add(key);
+        trRenderContent();
+      });
+    });
+  }
+}
+
+function trRenderAll() {
+  trRenderPersonTabs();
+  trRenderDayTabs();
+  trRenderContent();
+}
+
+function trLoadData() {
+  try {
+    trTrainingLog = JSON.parse(localStorage.getItem('training_log') || '{}');
+    trTrainingLog.p1 = trTrainingLog.p1 || [];
+    trTrainingLog.p2 = trTrainingLog.p2 || [];
+  } catch (err) { trTrainingLog = { p1: [], p2: [] }; }
+
+  trRenderAll();
+}
+
+/* ===================== INIT ===================== */
+
+function loadSharedSettings() {
+  try {
+    const s = localStorage.getItem('sharedSettings');
+    if (s) { sharedSettings = JSON.parse(s); return; }
+  } catch (err) {}
+  // First run on the combined page: migrate names from whichever standalone page was used before.
+  for (const key of ['settings', 'calorie_settings', 'training_settings']) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.p1) sharedSettings.p1 = parsed.p1;
+        if (parsed.p2) sharedSettings.p2 = parsed.p2;
+        break;
+      }
+    } catch (err) {}
+  }
+}
+
+function loadCoupleCode() {
+  try {
+    const c = localStorage.getItem('coupleCode');
+    if (c) { coupleCode = c; return; }
+  } catch (err) {}
+  // First run on the combined page: migrate the sync code from whichever standalone page was used before.
+  for (const key of ['calorie_coupleCode', 'training_coupleCode']) {
+    try {
+      const c = localStorage.getItem(key);
+      if (c) { coupleCode = c; break; }
+    } catch (err) {}
+  }
+}
+
+loadSharedSettings();
+loadCoupleCode();
+applySharedSettingsToInputs();
+document.getElementById('syncCode').value = coupleCode;
+
+wkLoadData();
+calLoadData();
+trLoadData();
+
+setSyncStatus(coupleCode ? 'Connecting…' : 'Not syncing — enter a sync code above to share data across devices.');
+wkSubscribeToCloud(coupleCode);
+calSubscribeToCloud(coupleCode);
+trSubscribeToCloud(coupleCode);
+
 let initialSetupCollapsed = true;
 try { initialSetupCollapsed = localStorage.getItem('setupCollapsed') !== '0'; } catch (err) {}
 setSetupCollapsed(initialSetupCollapsed);
 
-loadData();
+let initialTab = 'weekly';
+try {
+  const params = new URLSearchParams(window.location.search);
+  initialTab = params.get('tab') || localStorage.getItem('activeTab') || 'weekly';
+} catch (err) {}
+showTab(initialTab);
 </script>
 </body>
 </html>
