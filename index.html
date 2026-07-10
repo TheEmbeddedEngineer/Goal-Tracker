@@ -1657,7 +1657,7 @@ const PLAN_P1 = {
       ['Seated cable row', '3x10-12', 'https://www.muscleandstrength.com/exercises/seated-row.html'],
       ['Chest-supported dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
       ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
-      ['Wrist extensor curls (elbow health)', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
+      ['Preacher curl', '3x12', 'https://www.muscleandstrength.com/exercises/preacher-curl.html']
     ],
     home: [
       ['Dumbbell reverse fly (light, slow)', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
@@ -1665,7 +1665,7 @@ const PLAN_P1 = {
       ['Two-arm bent-over dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-row.html'],
       ['Chest-supported row lying face-down on a bench', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
       ['Dumbbell reverse fly, wide grip', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
-      ['Dumbbell wrist extension', '2x15', 'https://www.muscleandstrength.com/exercises/reverse-dumbbell-wrist-curl-over-bench.html']
+      ['Preacher curl', '3x12', 'https://www.muscleandstrength.com/exercises/preacher-curl.html']
     ],
     footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows.'
   },
@@ -1856,6 +1856,34 @@ let trApplyingRemote = false;
 
 function trCurrentPlan() { return trActivePerson === 'p1' ? PLAN_P1 : PLAN_P2; }
 
+// One-time rename for day2's last exercise, replaced by Preacher curl — carries over any
+// already-logged weight from the old exercise name instead of leaving it orphaned.
+const TR_EXERCISE_RENAMES = {
+  'Wrist extensor curls (elbow health)': 'Preacher curl',
+  'Dumbbell wrist extension': 'Preacher curl'
+};
+
+function trApplyLegacyExerciseRenames() {
+  let changed = false;
+  ['p1', 'p2'].forEach(pk => {
+    (trTrainingLog[pk] || []).forEach(l => {
+      if (!l.weights) return;
+      Object.keys(TR_EXERCISE_RENAMES).forEach(oldName => {
+        if (l.weights[oldName] === undefined) return;
+        const newName = TR_EXERCISE_RENAMES[oldName];
+        if (l.weights[newName] === undefined) l.weights[newName] = l.weights[oldName];
+        delete l.weights[oldName];
+        changed = true;
+      });
+    });
+  });
+  if (changed) {
+    try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+    trRenderAll();
+    trPushToCloud();
+  }
+}
+
 function trApplyRemoteData(data) {
   trApplyingRemote = true;
   if (data.settings) {
@@ -1868,6 +1896,7 @@ function trApplyRemoteData(data) {
   try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
   trRenderAll();
   trApplyingRemote = false;
+  trApplyLegacyExerciseRenames();
 }
 
 function trSubscribeToCloud(code) {
@@ -2085,8 +2114,21 @@ function trFindPreviousLog(person, dayKey, variant, beforeDate) {
 const trExpandedLogs = new Set();
 function trLogKey(date, variant) { return date + '|' + variant; }
 
+// Exercise names in the order the training plan lists them for this log's day+variant,
+// so past sessions display in plan order instead of the object's insertion order.
+function trExerciseOrderForLog(l) {
+  const plan = trCurrentPlan();
+  const day = plan && plan[l.day];
+  if (!day) return [];
+  const orderList = (day.home && l.variant === 'home') ? day.home : day.gym;
+  return (orderList || []).map(ex => ex[0]);
+}
+
 function trRenderLogDetail(l, prev) {
-  return Object.entries(l.weights).map(([name, w]) => {
+  const orderedNames = trExerciseOrderForLog(l).filter(name => l.weights[name] !== undefined);
+  Object.keys(l.weights).forEach(name => { if (!orderedNames.includes(name)) orderedNames.push(name); });
+  return orderedNames.map(name => {
+    const w = l.weights[name];
     let deltaHtml = '<span class="pl-ex-delta flat">first time</span>';
     if (prev && prev.weights[name] !== undefined) {
       const d = Math.round((w - prev.weights[name]) * 100) / 100;
@@ -2293,6 +2335,7 @@ function trLoadData() {
   trOverviewViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   trRenderAll();
+  trApplyLegacyExerciseRenames();
 }
 
 /* ===================== INIT ===================== */
