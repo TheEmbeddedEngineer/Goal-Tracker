@@ -992,14 +992,46 @@ function calMergeFoodBank(remoteBank) {
   calFoodBank = Array.from(byName.values());
 }
 
+// Same problem for a day's logged items: two devices logging around the same time can
+// otherwise wipe out each other's additions for that day. Individual food items have no
+// stable id, so identity is approximated by their full content — good enough to stop
+// concurrent adds from being lost, at the cost of not being able to "merge" a concurrent
+// edit to the exact same item (deletes/edits skip this merge entirely, see skipMerge).
+function calItemKey(it) {
+  return [it.name, it.unit, it.grams, it.calories, it.protein, it.carbs, it.fat, it.category].join('|');
+}
+
+function calMergeEntries(remoteEntries) {
+  const merged = {};
+  ['p1', 'p2'].forEach(pk => {
+    merged[pk] = {};
+    const localDays = calEntries[pk] || {};
+    const remoteDays = (remoteEntries || {})[pk] || {};
+    const allDates = new Set([...Object.keys(localDays), ...Object.keys(remoteDays)]);
+    allDates.forEach(ds => {
+      const localItems = (localDays[ds] || {}).items || [];
+      const remoteItems = (remoteDays[ds] || {}).items || [];
+      const byKey = new Map();
+      remoteItems.forEach(it => byKey.set(calItemKey(it), it));
+      localItems.forEach(it => byKey.set(calItemKey(it), it));
+      merged[pk][ds] = { items: Array.from(byKey.values()) };
+    });
+  });
+  calEntries = merged;
+}
+
 async function calPushToCloud(opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
   try {
     await ensureAuth();
     try {
       const snap = await getDoc(doc(db, 'calories', coupleCode));
-      if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
-    } catch (err) { console.error('Could not merge remote food bank before push:', err); }
+      if (snap.exists()) {
+        const remote = snap.data();
+        calMergeFoodBank(remote.foodBank);
+        if (!opts.skipMerge) calMergeEntries(remote.entries);
+      }
+    } catch (err) { console.error('Could not merge remote data before push:', err); }
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'calories', coupleCode), {
       entries: calEntries,
@@ -1008,6 +1040,9 @@ async function calPushToCloud(opts = {}) {
       foodBank: calFoodBank
     }, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+    calRenderLogCard();
+    calRenderMonth();
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (calories): could not save');
@@ -1296,7 +1331,8 @@ async function calAddItem() {
   if (!calEntries[calActivePerson][ds]) calEntries[calActivePerson][ds] = { items: [] };
   const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat, category };
   const items = calEntries[calActivePerson][ds].items;
-  if (calEditingIndex >= 0 && items[calEditingIndex]) {
+  const wasEditing = calEditingIndex >= 0 && !!items[calEditingIndex];
+  if (wasEditing) {
     items[calEditingIndex] = newItem;
   } else {
     items.push(newItem);
@@ -1306,7 +1342,9 @@ async function calAddItem() {
   calClearManualFields();
   calRenderLogCard();
   calRenderMonth();
-  calPushToCloud();
+  // Editing replaces a specific item in place, so trust the local result rather than
+  // merging (a stale remote copy could otherwise resurrect the pre-edit version).
+  calPushToCloud({ skipMerge: wasEditing });
 }
 
 function calDeleteItem(index) {
@@ -1317,7 +1355,7 @@ function calDeleteItem(index) {
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   calRenderLogCard();
   calRenderMonth();
-  calPushToCloud();
+  calPushToCloud({ skipMerge: true });
 }
 
 function calEditItem(index) {
@@ -1513,7 +1551,7 @@ document.getElementById('calResetBtn').addEventListener('click', async () => {
   calEntries = {};
   try { localStorage.removeItem('calorie_entries'); } catch (err) {}
   calRenderAll();
-  calPushToCloud({ replace: true });
+  calPushToCloud({ replace: true, skipMerge: true });
 });
 
 /* ===================== TRAINING PLAN ===================== */
