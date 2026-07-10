@@ -134,10 +134,6 @@
   .food-item .fi-macros { font-size:11px; color:var(--text-muted); white-space:nowrap; }
   .food-item .fi-edit { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:13px; cursor:pointer; padding:2px 6px; }
   .food-item .fi-del { flex-shrink:0; background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 6px; }
-  .totals-line { margin-top:10px; padding-top:10px; border-top:1px solid var(--border-strong); }
-  .totals-row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; }
-  .totals-row .tname { color:var(--text-secondary); flex:1; min-width:0; }
-  .totals-row > span:last-child { display:flex; align-items:center; flex-shrink:0; white-space:nowrap; }
   .month-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .month-nav button { padding:6px 10px; border:1px solid var(--border-strong); border-radius:8px; background:var(--card); color:var(--text); font-size:13px; cursor:pointer; }
   .month-nav h2 { margin:0; }
@@ -320,7 +316,6 @@
 
       <div class="cal-rings" id="calRings"></div>
       <div id="foodItemsList"></div>
-      <div class="totals-line" id="totalsLine"></div>
     </div>
 
     <div class="card">
@@ -1393,7 +1388,7 @@ function calRingStatus(ds, isMet) {
   return ds === todayStr() ? 'inprogress' : 'bad';
 }
 
-const CAL_RING_COLORS = { good: '--green-text', inprogress: '--amber-text', bad: '--red-text' };
+const CAL_RING_COLORS = { good: '--green-text', inprogress: '--amber-text', bad: '--red-text', neutral: '--accent' };
 
 function calProgressRing(title, centerValue, centerLabel, fraction, status) {
   const r = 48;
@@ -1462,12 +1457,11 @@ function calRenderLogCard() {
 
   document.getElementById('calRings').innerHTML =
     calProgressRing('Calories', Math.abs(calLeft), calLeft >= 0 ? 'kcal left' : 'kcal over', goal.calories > 0 ? totals.calories / goal.calories : 0, calStatus) +
-    calProgressRing('Protein', Math.max(0, protLeft), protLeft > 0 ? 'g left' : 'goal met', goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus);
-
-  document.getElementById('totalsLine').innerHTML = `
-    <div class="totals-row"><span class="tname">Carbs</span><span><span class="count">${Math.round(totals.carbs)}g</span></span></div>
-    <div class="totals-row"><span class="tname">Fat</span><span><span class="count">${Math.round(totals.fat)}g</span></span></div>
-  `;
+    calProgressRing('Protein', Math.max(0, protLeft), protLeft > 0 ? 'g left' : 'goal met', goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus) +
+    // Carbs/fat have no set goal in this app, so these two are just totals — a full,
+    // neutral-colored ring rather than a pass/fail progress indicator.
+    calProgressRing('Carbs', Math.round(totals.carbs), 'g total', 1, 'neutral') +
+    calProgressRing('Fat', Math.round(totals.fat), 'g total', 1, 'neutral');
 }
 
 // Shared by the calorie and training monthly calendars.
