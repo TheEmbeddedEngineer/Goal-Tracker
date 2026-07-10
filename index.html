@@ -123,6 +123,11 @@
   .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   .food-cat-title { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; margin:14px 0 2px; }
   .food-cat-title:first-child { margin-top:6px; }
+  .cal-rings { display:flex; justify-content:center; gap:20px; flex-wrap:wrap; margin:6px 0 16px; }
+  .cal-ring-wrap { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .cal-ring-value { font-size:24px; font-weight:700; fill:var(--text); }
+  .cal-ring-label { font-size:10px; fill:var(--text-muted); }
+  .cal-ring-title { font-size:12px; font-weight:600; color:var(--text-secondary); }
   .food-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .food-item:last-child { border-bottom:none; }
   .food-item .fi-name { flex:1; min-width:0; }
@@ -313,6 +318,7 @@
       <button class="primary" id="addItemBtn">Add to log</button>
       <button type="button" class="link-btn" id="cancelEditBtn" style="display:none; width:100%; text-align:center;">Cancel edit</button>
 
+      <div class="cal-rings" id="calRings"></div>
       <div id="foodItemsList"></div>
       <div class="totals-line" id="totalsLine"></div>
     </div>
@@ -1380,6 +1386,35 @@ function calEditItem(index) {
   calCloseDropdown();
 }
 
+// Reuses the same good/inprogress/bad convention as the month calendar: a metric that's
+// not yet met still counts as "in progress" rather than "missed" while the day is today.
+function calRingStatus(ds, isMet) {
+  if (isMet) return 'good';
+  return ds === todayStr() ? 'inprogress' : 'bad';
+}
+
+const CAL_RING_COLORS = { good: '--green-text', inprogress: '--amber-text', bad: '--red-text' };
+
+function calProgressRing(title, centerValue, centerLabel, fraction, status) {
+  const r = 48;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const offset = c * (1 - clamped);
+  return `
+    <div class="cal-ring-wrap">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--border)" stroke-width="11"></circle>
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="var(${CAL_RING_COLORS[status]})" stroke-width="11"
+          stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"
+          transform="rotate(-90 60 60)"></circle>
+        <text x="60" y="57" text-anchor="middle" class="cal-ring-value">${centerValue}</text>
+        <text x="60" y="75" text-anchor="middle" class="cal-ring-label">${centerLabel}</text>
+      </svg>
+      <div class="cal-ring-title">${title}</div>
+    </div>
+  `;
+}
+
 function calFoodItemRowHtml(it, i) {
   return `<div class="food-item">
         <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
@@ -1420,9 +1455,16 @@ function calRenderLogCard() {
   const goal = calGoalsForDay(ds)[calActivePerson];
   const calMet = totals.calories <= goal.calories;
   const protMet = totals.protein >= goal.protein;
+  const calStatus = calRingStatus(ds, calMet);
+  const protStatus = calRingStatus(ds, protMet);
+  const calLeft = Math.round(goal.calories - totals.calories);
+  const protLeft = Math.round(goal.protein - totals.protein);
+
+  document.getElementById('calRings').innerHTML =
+    calProgressRing('Calories', Math.abs(calLeft), calLeft >= 0 ? 'kcal left' : 'kcal over', goal.calories > 0 ? totals.calories / goal.calories : 0, calStatus) +
+    calProgressRing('Protein', Math.max(0, protLeft), protLeft > 0 ? 'g left' : 'goal met', goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus);
+
   document.getElementById('totalsLine').innerHTML = `
-    <div class="totals-row"><span class="tname">Calories</span><span><span class="count">${Math.round(totals.calories)}/${goal.calories}</span><span class="status ${calMet?'met':'missed'}">${calMet?'On track':'Over'}</span></span></div>
-    <div class="totals-row"><span class="tname">Protein</span><span><span class="count">${Math.round(totals.protein)}/${goal.protein}g</span><span class="status ${protMet?'met':'missed'}">${protMet?'Met':'Under'}</span></span></div>
     <div class="totals-row"><span class="tname">Carbs</span><span><span class="count">${Math.round(totals.carbs)}g</span></span></div>
     <div class="totals-row"><span class="tname">Fat</span><span><span class="count">${Math.round(totals.fat)}g</span></span></div>
   `;
