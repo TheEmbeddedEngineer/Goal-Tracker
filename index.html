@@ -143,13 +143,13 @@
   .month-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
   .month-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:8px; }
   .month-day { aspect-ratio:1; border-radius:5px; background:var(--heat-none); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--text-muted); }
-  .month-day.good { color:var(--green-text); }
-  .month-day.good { background:var(--green-border); }
+  .month-day.good { color:var(--green-text); background:var(--green-border); }
   .month-day.bad { background:var(--red-border); }
+  .month-day.inprogress { background:var(--amber-border); color:var(--amber-text); }
   .month-day.blank { background:none; }
   .month-day:not(.blank) { cursor:pointer; }
   .month-day.selected { outline:2px solid var(--accent); outline-offset:1px; }
-  .month-legend { display:flex; gap:14px; font-size:11px; color:var(--text-muted); }
+  .month-legend { display:flex; gap:10px 14px; flex-wrap:wrap; font-size:11px; color:var(--text-muted); }
   .month-legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend-swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
   .day-tabs { display:flex; gap:6px; margin-bottom:1rem; overflow-x:auto; padding-bottom:2px; }
@@ -320,6 +320,7 @@
       <div class="month-cols" id="monthCols"></div>
       <div class="month-legend">
         <span><span class="legend-swatch" style="background:var(--green-border)"></span>Goals met</span>
+        <span><span class="legend-swatch" style="background:var(--amber-border)"></span>In progress (today)</span>
         <span><span class="legend-swatch" style="background:var(--red-border)"></span>Goals missed</span>
         <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
       </div>
@@ -1249,7 +1250,10 @@ function calDayStatus(person, dateStr) {
   const goal = calGoalsForDay(dateStr)[person];
   const calOk = totals.calories <= goal.calories;
   const protOk = totals.protein >= goal.protein;
-  return (calOk && protOk) ? 'good' : 'bad';
+  if (calOk && protOk) return 'good';
+  // Today isn't over yet, so an unmet goal so far isn't a "miss" — it's still in progress.
+  if (dateStr === todayStr()) return 'inprogress';
+  return 'bad';
 }
 
 function calRenderMonth() {
@@ -1272,7 +1276,7 @@ function calRenderMonth() {
       const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const status = calDayStatus(pk, ds);
       const totals = calDayTotals(pk, ds);
-      const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein';
+      const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein' + (status === 'inprogress' ? ' (today, still logging)' : '');
       const selected = calSelectedMonthDate === ds && calActivePerson === pk ? ' selected' : '';
       return `<div class="month-day ${status}${selected}" data-date="${ds}" data-person="${pk}" title="${title}"></div>`;
     }).join('');
