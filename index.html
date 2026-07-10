@@ -86,9 +86,10 @@
   .week-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
   .week-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
   .heatmap { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:12px; }
-  .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
   .heat-square { width:100%; aspect-ratio:1; border-radius:5px; background:var(--heat-0); }
   .heat-day .dlabel { font-size:10px; color:var(--text-muted); }
+  .day-detail { font-size:12px; color:var(--text-secondary); margin:-2px 0 10px; min-height:16px; }
   .cat-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; font-size:13px; }
   .cat-row .catname { color:var(--text-secondary); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cat-row > span:last-child { display:flex; align-items:center; flex-shrink:0; white-space:nowrap; }
@@ -623,10 +624,19 @@ function wkRenderHeatmap(personKey, weekMonday) {
     const level = wkDayCompletionLevel(personKey, ds);
     const heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
     const title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
-    html += `<div class="heat-day" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
+    html += `<div class="heat-day" data-date="${ds}" data-person="${personKey}" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
   }
   html += '</div>';
   return html;
+}
+
+// Detailed per-category breakdown for a single day, shown on hover/tap of a heatmap square.
+function wkDayDetailText(personKey, dateStr) {
+  const label = parseDate(dateStr).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+  const day = (wkEntries[personKey] || {})[dateStr];
+  if (!day) return label + ': nothing logged yet';
+  const parts = CATS.map(([k, catLabel]) => (day[k] ? '✓ ' : '✗ ') + catLabel);
+  return label + ' — ' + parts.join('   ');
 }
 
 function wkRenderAll() {
@@ -638,9 +648,11 @@ function wkRenderThisWeek() {
   const monday = wkViewedWeekMonday;
   const nowMonday = getMonday(new Date());
   const isCurrentWeek = monday.getTime() === nowMonday.getTime();
+  // Days fully finished so far this week — today doesn't count until it's over,
+  // so "remaining" still includes today while it's in progress.
   const daysElapsed = monday.getTime() < nowMonday.getTime()
     ? 7
-    : Math.min(7, Math.floor((new Date() - monday) / 86400000) + 1);
+    : Math.min(7, Math.floor((new Date() - monday) / 86400000));
   const remaining = 7 - daysElapsed;
 
   const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
@@ -676,10 +688,20 @@ function wkRenderThisWeek() {
     return `<div class="week-col">
       <div class="pname" style="color:var(--${pk})">${name}</div>
       ${wkRenderHeatmap(pk, monday)}
+      <div class="day-detail" id="wkDayDetail-${pk}">Hover or tap a day above to see what was logged.</div>
       ${rows}
       <div class="fine-line"><span>Fine this week</span><span class="fine-tag ${fine?'yes':'no'}">${fine?'Yes':'No'}</span></div>
     </div>`;
   }).join('');
+
+  wrap.querySelectorAll('.heat-day[data-date]').forEach(el => {
+    const show = () => {
+      const target = document.getElementById('wkDayDetail-' + el.dataset.person);
+      if (target) target.textContent = wkDayDetailText(el.dataset.person, el.dataset.date);
+    };
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('click', show);
+  });
 }
 
 function wkAllWeekKeys() {
