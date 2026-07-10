@@ -887,6 +887,13 @@ const CAL_LEGACY_FIXES = {
   'Whey': { category: 'Protein Supplements' }
 };
 
+// Ad-hoc English-name corrections for entries that already have a category (so they
+// wouldn't be touched by CAL_LEGACY_FIXES above). Keyed by the current "de" name.
+const CAL_NAME_FIXES = {
+  'Gervais Hüttenkäse 0.9%': 'Gervais cottage cheese 0.9%',
+  'Hüttenkäse 4%': 'Cottage cheese 4%'
+};
+
 function calApplyLegacyFixes() {
   let changed = false;
   calFoodBank.forEach(entry => {
@@ -896,6 +903,14 @@ function calApplyLegacyFixes() {
     if (fix && fix.en) entry.en = fix.en;
     if (fix && fix.de) entry.de = fix.de;
     changed = true;
+  });
+
+  calFoodBank.forEach(entry => {
+    const fixedEn = CAL_NAME_FIXES[entry.de];
+    if (fixedEn && entry.en !== fixedEn) {
+      entry.en = fixedEn;
+      changed = true;
+    }
   });
 
   // Logged days from before categories existed only have a category on the food
