@@ -845,6 +845,64 @@ function calGoalsForDay(dateStr) {
 
 function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
 
+// One-time, idempotent cleanup for food bank entries created before categories existed:
+// assigns a category and fixes a few names that were just the German word copied into
+// the English field (or a typo). Entries that already have a category are left alone,
+// so this only ever touches each legacy entry once.
+const CAL_LEGACY_FIXES = {
+  'Thunfisch': { category: 'Meat, Fish & Eggs', en: 'Tuna' },
+  'Pfirsich': { category: 'Fruits', en: 'Peach' },
+  'Lachs': { category: 'Meat, Fish & Eggs', en: 'Salmon' },
+  'Zwiebeln': { category: 'Vegetables', en: 'Onions' },
+  'Salat Shirazi': { category: 'Vegetables', en: 'Shirazi salad' },
+  'TK-Beeren': { category: 'Fruits', en: 'Frozen berries' },
+  'Magerquark': { category: 'Dairy', en: 'Low-fat quark' },
+  'Joghurt 2%': { category: 'Dairy', en: 'Yogurt (2%)' },
+  'Bier': { category: 'Snacks & Drinks', en: 'Beer' },
+  'Heidelberren': { category: 'Fruits', en: 'Blueberries', de: 'Heidelbeeren' },
+  'Apple': { category: 'Fruits', de: 'Apfel' },
+  'Brezel': { category: 'Snacks & Drinks' },
+  'Nektarine': { category: 'Fruits' },
+  'Ei': { category: 'Meat, Fish & Eggs' },
+  'Protein-Wrap': { category: 'Grains, Pasta & Rice' },
+  'Hüttenkäse (fettarm)': { category: 'Dairy' },
+  'Tomate': { category: 'Vegetables' },
+  'Gurke': { category: 'Vegetables' },
+  'Mandeln': { category: 'Nuts & Oils' },
+  'Walnusskerne': { category: 'Nuts & Oils' },
+  'Rohe Kartoffeln': { category: 'Grains, Pasta & Rice' },
+  'Rohe Hähnchenbrust': { category: 'Meat, Fish & Eggs' },
+  'Pflaumen': { category: 'Fruits' },
+  'Tagliatelle': { category: 'Grains, Pasta & Rice' },
+  'Rumpsteak': { category: 'Meat, Fish & Eggs' },
+  'Olivenöl': { category: 'Nuts & Oils' },
+  'Kirschen': { category: 'Fruits' },
+  'Kochcreme': { category: 'Dairy' },
+  'Butter': { category: 'Dairy' },
+  'Parmesan': { category: 'Dairy' },
+  'Wassermelone': { category: 'Fruits' },
+  'Powerade Energie-Drink': { category: 'Snacks & Drinks' },
+  'Proteinriegel': { category: 'Protein Supplements' },
+  'Penne Bolognese': { category: 'Restaurant/Canteen' },
+  'Whey': { category: 'Protein Supplements' }
+};
+
+function calApplyLegacyFixes() {
+  let changed = false;
+  calFoodBank.forEach(entry => {
+    if (entry.category) return;
+    const fix = CAL_LEGACY_FIXES[entry.de] || CAL_LEGACY_FIXES[entry.en];
+    entry.category = fix ? fix.category : 'Other';
+    if (fix && fix.en) entry.en = fix.en;
+    if (fix && fix.de) entry.de = fix.de;
+    changed = true;
+  });
+  if (changed) {
+    try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+    calPushToCloud();
+  }
+}
+
 function calApplyRemoteData(data) {
   calApplyingRemote = true;
   calEntries = data.entries || {};
@@ -864,6 +922,7 @@ function calApplyRemoteData(data) {
   calRenderPersonTabs();
   calRenderAll();
   calApplyingRemote = false;
+  calApplyLegacyFixes();
 }
 
 function calSubscribeToCloud(code) {
@@ -1368,6 +1427,7 @@ function calLoadData() {
 
   calRenderPersonTabs();
   calRenderAll();
+  calApplyLegacyFixes();
 }
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
