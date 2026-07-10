@@ -2260,19 +2260,34 @@ function trDeleteLog(dayKey, date, variant) {
 
 let trPendingViewLog = null;
 
-function trToggleCoreToday() {
-  const ds = todayStr();
+// Selected date in the core-stability save form — kept across re-renders so saving
+// doesn't silently jump the date picker back to today.
+let trCoreLogDate = null;
+
+function trLoadCoreCheckboxForDate() {
+  const dateInput = document.getElementById('coreLogDate');
+  const checkbox = document.getElementById('coreDoneCheckbox');
+  if (!dateInput || !checkbox) return;
+  trCoreLogDate = dateInput.value;
+  checkbox.checked = (trCoreLog[trActivePerson] || []).includes(trCoreLogDate);
+}
+
+function trSaveCoreLog() {
+  const ds = document.getElementById('coreLogDate').value || todayStr();
+  const checked = document.getElementById('coreDoneCheckbox').checked;
+  trCoreLogDate = ds;
   const arr = trCoreLog[trActivePerson] || (trCoreLog[trActivePerson] = []);
   const idx = arr.indexOf(ds);
-  const checking = idx < 0;
-  if (checking) arr.push(ds); else arr.splice(idx, 1);
+  const wasPresent = idx >= 0;
+  if (checked && !wasPresent) arr.push(ds);
+  else if (!checked && wasPresent) arr.splice(idx, 1);
+  else return;
   try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
   // Unchecking is a delete — skip the merge so a stale remote copy can't bring it back.
-  trPushToCloud({ skipMerge: !checking });
+  trPushToCloud({ skipMerge: !checked });
 }
 
 function trRenderBackCare(bc) {
-  const todayDone = (trCoreLog[trActivePerson] || []).includes(todayStr());
   return `
     <h2>Back care</h2>
     <p class="card-sub">${bc.intro}</p>
@@ -2280,10 +2295,17 @@ function trRenderBackCare(bc) {
       const isCore = s.title.indexOf('Core stability') === 0;
       return `
       <div class="section-title">${s.title}</div>
-      ${isCore ? `<label class="core-check-row">
-        <input type="checkbox" id="coreDoneCheckbox" ${todayDone ? 'checked' : ''}>
-        <span>I did the core stability block today</span>
-      </label>` : ''}
+      ${isCore ? `
+        <label class="core-check-row">
+          <input type="checkbox" id="coreDoneCheckbox">
+          <span>Done</span>
+        </label>
+        <div class="log-date-row">
+          <label>Date</label>
+          <input type="date" id="coreLogDate">
+        </div>
+        <button class="primary" id="coreSaveBtn">Save</button>
+      ` : ''}
       ${s.items.map(trExRow).join('')}
     `;
     }).join('')}
@@ -2315,8 +2337,15 @@ function trRenderContent() {
     trRenderOverviewSelectedDay();
   } else if (trActiveDay === 'backcare') {
     contentEl.innerHTML = trRenderBackCare(plan.backcare);
-    const coreCheckbox = document.getElementById('coreDoneCheckbox');
-    if (coreCheckbox) coreCheckbox.addEventListener('change', trToggleCoreToday);
+    const coreDateInput = document.getElementById('coreLogDate');
+    if (coreDateInput) {
+      coreDateInput.max = todayStr();
+      coreDateInput.value = trCoreLogDate || todayStr();
+      trLoadCoreCheckboxForDate();
+      coreDateInput.addEventListener('change', trLoadCoreCheckboxForDate);
+    }
+    const coreSaveBtn = document.getElementById('coreSaveBtn');
+    if (coreSaveBtn) coreSaveBtn.addEventListener('click', trSaveCoreLog);
   } else {
     const day = plan[trActiveDay];
     contentEl.innerHTML = trRenderDay(day, trActiveDay);
