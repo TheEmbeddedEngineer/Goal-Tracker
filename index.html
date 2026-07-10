@@ -897,8 +897,27 @@ function calApplyLegacyFixes() {
     if (fix && fix.de) entry.de = fix.de;
     changed = true;
   });
+
+  // Logged days from before categories existed only have a category on the food
+  // bank entry, not on the individual log item — backfill those too, so past days
+  // group correctly instead of dumping everything into "Other".
+  ['p1', 'p2'].forEach(pk => {
+    const personEntries = calEntries[pk] || {};
+    Object.values(personEntries).forEach(day => {
+      (day.items || []).forEach(item => {
+        if (item.category) return;
+        const bankEntry = calFindInBank(item.name);
+        const fix = CAL_LEGACY_FIXES[item.name];
+        item.category = (bankEntry && bankEntry.category) || (fix && fix.category) || 'Other';
+        changed = true;
+      });
+    });
+  });
+
   if (changed) {
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+    calRenderAll();
     calPushToCloud();
   }
 }
