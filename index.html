@@ -348,7 +348,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBlts7uMhKzrBpGl-yK6hyn6TzP-Yb3zYE",
@@ -978,10 +978,28 @@ function calSubscribeToCloud(code) {
   });
 }
 
+// Firestore replaces array fields wholesale on every write, so two clients saving around
+// the same time can silently clobber each other's food bank additions. Merge the latest
+// remote copy into the local one (by "de" name) right before every push, instead of
+// blindly overwriting with whatever happens to be in memory.
+function calMergeFoodBank(remoteBank) {
+  const byName = new Map();
+  (remoteBank || []).forEach(entry => byName.set(entry.de, entry));
+  calFoodBank.forEach(entry => {
+    const existing = byName.get(entry.de);
+    byName.set(entry.de, existing ? { ...existing, ...entry } : entry);
+  });
+  calFoodBank = Array.from(byName.values());
+}
+
 async function calPushToCloud(opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
   try {
     await ensureAuth();
+    try {
+      const snap = await getDoc(doc(db, 'calories', coupleCode));
+      if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
+    } catch (err) { console.error('Could not merge remote food bank before push:', err); }
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'calories', coupleCode), {
       entries: calEntries,
@@ -989,6 +1007,7 @@ async function calPushToCloud(opts = {}) {
       dailyGoals: calDailyGoals,
       foodBank: calFoodBank
     }, writeOpts);
+    try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (calories): could not save');
