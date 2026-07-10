@@ -1455,9 +1455,11 @@ function calRenderLogCard() {
   const calLeft = Math.round(goal.calories - totals.calories);
   const protLeft = Math.round(goal.protein - totals.protein);
 
+  const protLabel = protLeft > 0 ? 'g left' : protLeft === 0 ? 'goal met' : 'g extra';
+
   document.getElementById('calRings').innerHTML =
     calProgressRing('Calories', Math.abs(calLeft), calLeft >= 0 ? 'kcal left' : 'kcal over', goal.calories > 0 ? totals.calories / goal.calories : 0, calStatus) +
-    calProgressRing('Protein', Math.max(0, protLeft), protLeft > 0 ? 'g left' : 'goal met', goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus) +
+    calProgressRing('Protein', Math.abs(protLeft), protLabel, goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus) +
     // Carbs/fat have no set goal in this app, so these two are just totals — a full,
     // neutral-colored ring rather than a pass/fail progress indicator.
     calProgressRing('Carbs', Math.round(totals.carbs), 'g total', 1, 'neutral') +
