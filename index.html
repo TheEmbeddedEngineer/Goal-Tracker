@@ -121,6 +121,8 @@
   .autocomplete-item .ai-sub { font-size:11px; color:var(--text-muted); }
   .manual-grid label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px; }
   .manual-grid input { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
+  .food-cat-title { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; margin:14px 0 2px; }
+  .food-cat-title:first-child { margin-top:0; }
   .food-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .food-item:last-child { border-bottom:none; }
   .food-item .fi-name { flex:1; min-width:0; }
@@ -295,6 +297,10 @@
       <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
         <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
         <div><label>Unit</label><select id="foodUnit"><option value="gram">Grams</option><option value="piece">Piece / serving</option></select></div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Category</label>
+        <select id="foodCategory" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;"></select>
       </div>
       <p id="bankStatus" style="font-size:12px; color:var(--text-muted); margin:-4px 0 8px;"></p>
       <div class="manual-grid macros">
@@ -803,6 +809,24 @@ function wkLoadData() {
 
 /* ===================== CALORIE TRACKER ===================== */
 
+const CAL_CATEGORIES = [
+  'Fruits',
+  'Vegetables',
+  'Meat, Fish & Eggs',
+  'Dairy',
+  'Grains, Pasta & Rice',
+  'Nuts & Oils',
+  'Protein Supplements',
+  'Snacks & Drinks',
+  'Restaurant/Canteen',
+  'Other'
+];
+
+function calPopulateCategorySelect() {
+  const sel = document.getElementById('foodCategory');
+  sel.innerHTML = CAL_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
 let calEntries = {};
 let calGoals = { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, protein: 120 } };
 // Goals in effect for a given past day, frozen at the moment the goal changes so that
@@ -956,6 +980,7 @@ function calClearManualFields() {
   document.getElementById('foodProtein').value = '';
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
+  document.getElementById('foodCategory').value = 'Other';
   calActiveBankEntry = null;
   calEditingIndex = -1;
   document.getElementById('addItemBtn').textContent = 'Add to log';
@@ -1026,6 +1051,7 @@ function calFillFromBankEntry(entry, unit, amount) {
   document.getElementById('foodProtein').value = Math.round(ref.protein * factor * 10) / 10;
   document.getElementById('foodCarbs').value = Math.round(ref.carbs * factor * 10) / 10;
   document.getElementById('foodFat').value = Math.round(ref.fat * factor * 10) / 10;
+  document.getElementById('foodCategory').value = entry.category || 'Other';
   statusEl.textContent = '✓ Using "' + entry.en + ' / ' + entry.de + '" — auto-filled for ' + amount + (unit === 'piece' ? ' piece(s).' : 'g.');
 }
 
@@ -1117,7 +1143,7 @@ function calSearchOnGoogle() {
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
-function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat) {
+function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category) {
   if (!amount || amount <= 0) return;
   const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
   const refData = {
@@ -1130,11 +1156,12 @@ function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat) 
   if (entry) {
     entry[unit] = refData;
     entry.preferredUnit = unit;
+    entry.category = category;
   } else {
     const parts = name.split('/').map(s => s.trim()).filter(Boolean);
     const en = parts[0] || name;
     const de = parts[1] || parts[0] || name;
-    entry = { en, de, preferredUnit: unit, gram: null, piece: null };
+    entry = { en, de, preferredUnit: unit, gram: null, piece: null, category };
     entry[unit] = refData;
     calFoodBank.push(entry);
   }
@@ -1151,17 +1178,18 @@ async function calAddItem() {
   const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
   const carbs = parseFloat(document.getElementById('foodCarbs').value) || 0;
   const fat = parseFloat(document.getElementById('foodFat').value) || 0;
+  const category = document.getElementById('foodCategory').value || 'Other';
   const ds = calSelectedDate();
   if (!calEntries[calActivePerson]) calEntries[calActivePerson] = {};
   if (!calEntries[calActivePerson][ds]) calEntries[calActivePerson][ds] = { items: [] };
-  const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat };
+  const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat, category };
   const items = calEntries[calActivePerson][ds].items;
   if (calEditingIndex >= 0 && items[calEditingIndex]) {
     items[calEditingIndex] = newItem;
   } else {
     items.push(newItem);
   }
-  calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat);
+  calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category);
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   calClearManualFields();
   calRenderLogCard();
@@ -1194,6 +1222,7 @@ function calEditItem(index) {
   document.getElementById('foodProtein').value = item.protein;
   document.getElementById('foodCarbs').value = item.carbs;
   document.getElementById('foodFat').value = item.fat;
+  document.getElementById('foodCategory').value = item.category || (bankEntry && bankEntry.category) || 'Other';
   calEditingIndex = index;
   document.getElementById('addItemBtn').textContent = 'Update log entry';
   document.getElementById('cancelEditBtn').style.display = 'block';
@@ -1201,18 +1230,35 @@ function calEditItem(index) {
   calCloseDropdown();
 }
 
-function calRenderLogCard() {
-  const ds = calSelectedDate();
-  const items = calDayItems(calActivePerson, ds);
-  const listEl = document.getElementById('foodItemsList');
-  listEl.innerHTML = items.length === 0
-    ? '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>'
-    : items.map((it, i) => `<div class="food-item">
+function calFoodItemRowHtml(it, i) {
+  return `<div class="food-item">
         <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
         <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g P · ${Math.round(it.carbs)}g C · ${Math.round(it.fat)}g F</span>
         <button class="fi-edit" data-i="${i}">&#9998;</button>
         <button class="fi-del" data-i="${i}">&times;</button>
-      </div>`).join('');
+      </div>`;
+}
+
+function calRenderLogCard() {
+  const ds = calSelectedDate();
+  const items = calDayItems(calActivePerson, ds);
+  const listEl = document.getElementById('foodItemsList');
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>';
+  } else {
+    const groups = {};
+    items.forEach((it, i) => {
+      const cat = it.category || 'Other';
+      (groups[cat] || (groups[cat] = [])).push({ it, i });
+    });
+    const orderedCats = CAL_CATEGORIES.filter(c => groups[c]);
+    Object.keys(groups).forEach(c => { if (!orderedCats.includes(c)) orderedCats.push(c); });
+
+    listEl.innerHTML = orderedCats.map(cat => `
+      <div class="food-cat-title">${cat}</div>
+      ${groups[cat].map(({ it, i }) => calFoodItemRowHtml(it, i)).join('')}
+    `).join('');
+  }
   listEl.querySelectorAll('.fi-edit').forEach(btn => {
     btn.addEventListener('click', () => calEditItem(parseInt(btn.dataset.i)));
   });
@@ -1312,6 +1358,7 @@ function calLoadData() {
   try { calDailyGoals = JSON.parse(localStorage.getItem('calorie_dailyGoals') || '{}'); } catch (err) { calDailyGoals = {}; }
   try { calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { calFoodBank = []; }
 
+  calPopulateCategorySelect();
   calPopulateGoalsInputs();
   document.getElementById('calDatePicker').value = todayStr();
   document.getElementById('calDatePicker').max = todayStr();
