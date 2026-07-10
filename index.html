@@ -1388,7 +1388,7 @@ function calRingStatus(ds, isMet) {
   return ds === todayStr() ? 'inprogress' : 'bad';
 }
 
-const CAL_RING_COLORS = { good: '--green-text', inprogress: '--amber-text', bad: '--red-text', neutral: '--accent' };
+const CAL_RING_COLORS = { good: '--green-text', inprogress: '--amber-text', bad: '--red-text' };
 
 function calProgressRing(title, centerValue, centerLabel, fraction, status) {
   const r = 48;
@@ -1413,7 +1413,7 @@ function calProgressRing(title, centerValue, centerLabel, fraction, status) {
 function calFoodItemRowHtml(it, i) {
   return `<div class="food-item">
         <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
-        <span class="fi-macros">${Math.round(it.calories)} kcal · ${Math.round(it.protein)}g P · ${Math.round(it.carbs)}g C · ${Math.round(it.fat)}g F</span>
+        <span class="fi-macros">${Math.round(it.calories)} · ${Math.round(it.protein)}P · ${Math.round(it.carbs)}C · ${Math.round(it.fat)}F</span>
         <button class="fi-edit" data-i="${i}">&#9998;</button>
         <button class="fi-del" data-i="${i}">&times;</button>
       </div>`;
@@ -1457,13 +1457,21 @@ function calRenderLogCard() {
 
   const protLabel = protLeft > 0 ? 'g left' : protLeft === 0 ? 'goal met' : 'g extra';
 
+  // Simple 40/30 macro split derived from the calorie goal: max 40% of calories from
+  // carbs (4 kcal/g), max 30% from fat (9 kcal/g). Compared unrounded against the exact
+  // summed totals; only the displayed "left/over" number is rounded.
+  const carbGoal = (0.4 * goal.calories) / 4;
+  const fatGoal = (0.3 * goal.calories) / 9;
+  const carbLeft = carbGoal - totals.carbs;
+  const fatLeft = fatGoal - totals.fat;
+  const carbStatus = carbLeft >= 0 ? 'good' : 'bad';
+  const fatStatus = fatLeft >= 0 ? 'good' : 'bad';
+
   document.getElementById('calRings').innerHTML =
     calProgressRing('Calories', Math.abs(calLeft), calLeft >= 0 ? 'kcal left' : 'kcal over', goal.calories > 0 ? totals.calories / goal.calories : 0, calStatus) +
     calProgressRing('Protein', Math.abs(protLeft), protLabel, goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus) +
-    // Carbs/fat have no set goal in this app, so these two are just totals — a full,
-    // neutral-colored ring rather than a pass/fail progress indicator.
-    calProgressRing('Carbs', Math.round(totals.carbs), 'g total', 1, 'neutral') +
-    calProgressRing('Fat', Math.round(totals.fat), 'g total', 1, 'neutral');
+    calProgressRing('Carbs', Math.round(Math.abs(carbLeft)), carbLeft >= 0 ? 'g left' : 'g over', carbGoal > 0 ? totals.carbs / carbGoal : 0, carbStatus) +
+    calProgressRing('Fat', Math.round(Math.abs(fatLeft)), fatLeft >= 0 ? 'g left' : 'g over', fatGoal > 0 ? totals.fat / fatGoal : 0, fatStatus);
 }
 
 // Shared by the calorie and training monthly calendars.
