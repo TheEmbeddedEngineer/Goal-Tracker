@@ -1805,15 +1805,39 @@ function trSubscribeToCloud(code) {
   });
 }
 
+// Same wholesale-array-replacement risk as the calorie food bank: two devices logging
+// workouts around the same time can otherwise clobber each other's entries. Merge the
+// latest remote log into the local one (by date+day+variant) before pushing, except
+// right after a delete — there, trust the local list so the merge doesn't resurrect the
+// entry that was just removed.
+function trMergeLogArray(localArr, remoteArr) {
+  const key = l => l.date + '|' + l.day + '|' + l.variant;
+  const byKey = new Map();
+  (remoteArr || []).forEach(l => byKey.set(key(l), l));
+  (localArr || []).forEach(l => byKey.set(key(l), l));
+  return Array.from(byKey.values());
+}
+
 async function trPushToCloud(opts = {}) {
   if (!coupleCode || trApplyingRemote) return;
   try {
     await ensureAuth();
+    if (!opts.skipMerge) {
+      try {
+        const snap = await getDoc(doc(db, 'training', coupleCode));
+        if (snap.exists()) {
+          const remoteLog = snap.data().trainingLog || {};
+          trTrainingLog.p1 = trMergeLogArray(trTrainingLog.p1, remoteLog.p1);
+          trTrainingLog.p2 = trMergeLogArray(trTrainingLog.p2, remoteLog.p2);
+        }
+      } catch (err) { console.error('Could not merge remote training log before push:', err); }
+    }
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'training', coupleCode), {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
       trainingLog: trTrainingLog
     }, writeOpts);
+    try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (training): could not save');
@@ -2071,7 +2095,7 @@ function trDeleteLog(dayKey, date, variant) {
   const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
   if (idx >= 0) arr.splice(idx, 1);
   try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
-  trPushToCloud();
+  trPushToCloud({ skipMerge: true });
   trRenderContent();
 }
 
