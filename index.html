@@ -77,9 +77,11 @@
   .goal-row.done { border-color:var(--green-border); background:var(--green-bg); }
   .goal-row input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
   .goal-row .name { font-size:14px; flex:1; }
-  .core-check-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; cursor:pointer; font-size:13px; }
-  .core-check-row input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
-  .core-check-row:has(input:checked) { border-color:var(--green-border); background:var(--green-bg); }
+  .core-log-row { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .core-check-inline { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .core-check-inline input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
+  .core-log-row input[type="date"] { padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; flex:1; min-width:130px; }
+  .core-log-row button.primary { width:auto; margin-top:0; padding:9px 16px; flex-shrink:0; }
   button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
   button.primary:active { transform:scale(0.98); }
   .week-cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
@@ -2295,18 +2297,17 @@ function trRenderBackCare(bc) {
       const isCore = s.title.indexOf('Core stability') === 0;
       return `
       <div class="section-title">${s.title}</div>
-      ${isCore ? `
-        <label class="core-check-row">
-          <input type="checkbox" id="coreDoneCheckbox">
-          <span>Done</span>
-        </label>
-        <div class="log-date-row">
-          <label>Date</label>
-          <input type="date" id="coreLogDate">
-        </div>
-        <button class="primary" id="coreSaveBtn">Save</button>
-      ` : ''}
       ${s.items.map(trExRow).join('')}
+      ${isCore ? `
+        <div class="core-log-row">
+          <label class="core-check-inline">
+            <input type="checkbox" id="coreDoneCheckbox">
+            <span>Done</span>
+          </label>
+          <input type="date" id="coreLogDate">
+          <button class="primary" id="coreSaveBtn">Save</button>
+        </div>
+      ` : ''}
     `;
     }).join('')}
     <p class="note" style="margin-top:14px;">${bc.tightNote}</p>
