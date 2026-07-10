@@ -77,6 +77,9 @@
   .goal-row.done { border-color:var(--green-border); background:var(--green-bg); }
   .goal-row input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
   .goal-row .name { font-size:14px; flex:1; }
+  .core-check-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; cursor:pointer; font-size:13px; }
+  .core-check-row input { width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); }
+  .core-check-row:has(input:checked) { border-color:var(--green-border); background:var(--green-bg); }
   button.primary { background:var(--accent); color:var(--accent-text); border:1px solid var(--accent); border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:6px; }
   button.primary:active { transform:scale(0.98); }
   .week-cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
@@ -1849,6 +1852,9 @@ let trActivePerson = 'p1';
 let trActiveDay = 'overview';
 let trActiveVariant = 'gym';
 let trTrainingLog = { p1: [], p2: [] };
+// Dates (YYYY-MM-DD) the core stability block was done — a single checkbox per day,
+// not a per-exercise log like trTrainingLog.
+let trCoreLog = { p1: [], p2: [] };
 let trOverviewViewedMonth = null;
 let trOverviewSelectedDate = null;
 let trUnsub = null;
@@ -1891,9 +1897,11 @@ function trApplyRemoteData(data) {
     sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
   }
   trTrainingLog = data.trainingLog || { p1: [], p2: [] };
+  trCoreLog = data.coreLog || { p1: [], p2: [] };
   applySharedSettingsToInputs();
   try { localStorage.setItem('training_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2 })); } catch (err) {}
   try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+  try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
   trRenderAll();
   trApplyingRemote = false;
   trApplyLegacyExerciseRenames();
@@ -1931,6 +1939,13 @@ function trMergeLogArray(localArr, remoteArr) {
   return Array.from(byKey.values());
 }
 
+// Same idea for core-stability check-off dates: union the two lists so a concurrent
+// check-in isn't lost. Skipped on uncheck so a stale remote copy can't resurrect a date
+// that was just unchecked.
+function trMergeCoreLog(localArr, remoteArr) {
+  return Array.from(new Set([...(remoteArr || []), ...(localArr || [])])).sort();
+}
+
 async function trPushToCloud(opts = {}) {
   if (!coupleCode || trApplyingRemote) return;
   try {
@@ -1939,18 +1954,23 @@ async function trPushToCloud(opts = {}) {
       try {
         const snap = await getDoc(doc(db, 'training', coupleCode));
         if (snap.exists()) {
-          const remoteLog = snap.data().trainingLog || {};
-          trTrainingLog.p1 = trMergeLogArray(trTrainingLog.p1, remoteLog.p1);
-          trTrainingLog.p2 = trMergeLogArray(trTrainingLog.p2, remoteLog.p2);
+          const remote = snap.data();
+          trTrainingLog.p1 = trMergeLogArray(trTrainingLog.p1, remote.trainingLog && remote.trainingLog.p1);
+          trTrainingLog.p2 = trMergeLogArray(trTrainingLog.p2, remote.trainingLog && remote.trainingLog.p2);
+          trCoreLog.p1 = trMergeCoreLog(trCoreLog.p1, remote.coreLog && remote.coreLog.p1);
+          trCoreLog.p2 = trMergeCoreLog(trCoreLog.p2, remote.coreLog && remote.coreLog.p2);
         }
       } catch (err) { console.error('Could not merge remote training log before push:', err); }
     }
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'training', coupleCode), {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
-      trainingLog: trTrainingLog
+      trainingLog: trTrainingLog,
+      coreLog: trCoreLog
     }, writeOpts);
     try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
+    try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
+    trRenderContent();
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (training): could not save');
@@ -2057,10 +2077,16 @@ function trRenderOverviewCalendarGrid() {
     if (d === null) return '<div class="month-day blank"></div>';
     const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     const logs = trLogsForDate(trActivePerson, ds);
-    const status = logs.length ? 'good' : '';
+    const coreDone = (trCoreLog[trActivePerson] || []).includes(ds);
+    const hasAny = logs.length > 0 || coreDone;
+    const status = hasAny ? 'good' : '';
     const selected = trOverviewSelectedDate === ds ? ' selected' : '';
-    const title = logs.length ? ds + ': ' + logs.map(trDayVariantLabel).join(', ') : ds + ': not logged';
-    const label = logs.length ? logs.map(trDayShortLabel).join('/') : '';
+    const titleParts = logs.map(trDayVariantLabel);
+    if (coreDone) titleParts.push('Core stability');
+    const title = hasAny ? ds + ': ' + titleParts.join(', ') : ds + ': not logged';
+    const labelParts = logs.map(trDayShortLabel);
+    if (coreDone) labelParts.push('C');
+    const label = labelParts.join('/');
     return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}">${label}</div>`;
   }).join('');
   wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
@@ -2080,11 +2106,18 @@ function trRenderOverviewSelectedDay() {
     return;
   }
   const logs = trLogsForDate(trActivePerson, trOverviewSelectedDate);
-  if (logs.length === 0) {
+  const coreDone = (trCoreLog[trActivePerson] || []).includes(trOverviewSelectedDate);
+  if (logs.length === 0 && !coreDone) {
     el.innerHTML = `<div class="empty-state" style="padding:0.5rem 0;">No training logged on ${trOverviewSelectedDate}.</div>`;
     return;
   }
-  el.innerHTML = logs.map(l => {
+  const coreHtml = coreDone ? `<div class="past-log-row" style="margin-bottom:8px;">
+    <div class="pl-header" style="cursor:default;">
+      <span class="pl-date">${trOverviewSelectedDate}</span>
+      <span class="pl-meta">Core stability block</span>
+    </div>
+  </div>` : '';
+  el.innerHTML = coreHtml + logs.map(l => {
     const prev = trFindPreviousLog(trActivePerson, l.day, l.variant, l.date);
     return `<div class="past-log-row" style="margin-bottom:8px;">
       <div class="pl-header" style="cursor:default;">
@@ -2227,14 +2260,33 @@ function trDeleteLog(dayKey, date, variant) {
 
 let trPendingViewLog = null;
 
+function trToggleCoreToday() {
+  const ds = todayStr();
+  const arr = trCoreLog[trActivePerson] || (trCoreLog[trActivePerson] = []);
+  const idx = arr.indexOf(ds);
+  const checking = idx < 0;
+  if (checking) arr.push(ds); else arr.splice(idx, 1);
+  try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
+  // Unchecking is a delete — skip the merge so a stale remote copy can't bring it back.
+  trPushToCloud({ skipMerge: !checking });
+}
+
 function trRenderBackCare(bc) {
+  const todayDone = (trCoreLog[trActivePerson] || []).includes(todayStr());
   return `
     <h2>Back care</h2>
     <p class="card-sub">${bc.intro}</p>
-    ${bc.sections.map(s => `
+    ${bc.sections.map(s => {
+      const isCore = s.title.indexOf('Core stability') === 0;
+      return `
       <div class="section-title">${s.title}</div>
+      ${isCore ? `<label class="core-check-row">
+        <input type="checkbox" id="coreDoneCheckbox" ${todayDone ? 'checked' : ''}>
+        <span>I did the core stability block today</span>
+      </label>` : ''}
       ${s.items.map(trExRow).join('')}
-    `).join('')}
+    `;
+    }).join('')}
     <p class="note" style="margin-top:14px;">${bc.tightNote}</p>
   `;
 }
@@ -2263,6 +2315,8 @@ function trRenderContent() {
     trRenderOverviewSelectedDay();
   } else if (trActiveDay === 'backcare') {
     contentEl.innerHTML = trRenderBackCare(plan.backcare);
+    const coreCheckbox = document.getElementById('coreDoneCheckbox');
+    if (coreCheckbox) coreCheckbox.addEventListener('change', trToggleCoreToday);
   } else {
     const day = plan[trActiveDay];
     contentEl.innerHTML = trRenderDay(day, trActiveDay);
@@ -2330,6 +2384,11 @@ function trLoadData() {
     trTrainingLog.p1 = trTrainingLog.p1 || [];
     trTrainingLog.p2 = trTrainingLog.p2 || [];
   } catch (err) { trTrainingLog = { p1: [], p2: [] }; }
+  try {
+    trCoreLog = JSON.parse(localStorage.getItem('training_coreLog') || '{}');
+    trCoreLog.p1 = trCoreLog.p1 || [];
+    trCoreLog.p2 = trCoreLog.p2 || [];
+  } catch (err) { trCoreLog = { p1: [], p2: [] }; }
 
   const now = new Date();
   trOverviewViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
