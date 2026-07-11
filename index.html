@@ -252,6 +252,8 @@
 
   <!-- ===================== WEEKLY SECTION ===================== -->
   <div id="section-weekly">
+    <div class="person-tabs" id="wkPersonTabs"></div>
+
     <div class="card">
       <h2>Days needed per category</h2>
       <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
@@ -261,7 +263,6 @@
 
     <div class="card">
       <h2>Log a day</h2>
-      <div class="person-tabs" id="wkPersonTabs"></div>
       <div class="date-picker-row">
         <label>Date</label>
         <input type="date" id="wkDatePicker">
@@ -293,6 +294,8 @@
 
   <!-- ===================== CALORIES SECTION ===================== -->
   <div id="section-calories" style="display:none">
+    <div class="person-tabs" id="calPersonTabs"></div>
+
     <div class="card">
       <h2>Goals</h2>
       <div class="settings-row">
@@ -336,7 +339,6 @@
 
     <div class="card">
       <h2>Log food</h2>
-      <div class="person-tabs" id="calPersonTabs"></div>
       <div class="date-picker-row">
         <label>Date</label>
         <input type="date" id="calDatePicker">
@@ -512,6 +514,13 @@ document.querySelectorAll('.main-tabs button').forEach(b => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
 });
 
+function loadActivePerson(key) {
+  try { const v = localStorage.getItem(key); return (v === 'p1' || v === 'p2') ? v : 'p1'; } catch (err) { return 'p1'; }
+}
+function saveActivePerson(key, value) {
+  try { localStorage.setItem(key, value); } catch (err) {}
+}
+
 /* ===================== SHARED: date helpers ===================== */
 
 function todayStr() {
@@ -529,7 +538,7 @@ const EARLIEST_VISIBLE_WEEK = '2026-06-29';
 let wkEntries = {};
 let wkThresholds = { nutrition:5, screen:5, sport:5 };
 let wkWeeklyThresholds = {};
-let wkActivePerson = 'p1';
+let wkActivePerson = loadActivePerson('wkActivePerson');
 let wkViewedWeekMonday = null;
 let wkUnsub = null;
 let wkApplyingRemote = false;
@@ -622,6 +631,7 @@ function wkRenderPersonTabs() {
   tabs.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => {
       wkActivePerson = b.dataset.p;
+      saveActivePerson('wkActivePerson', wkActivePerson);
       wkRenderPersonTabs();
       wkLoadCheckboxesForDate();
     });
@@ -929,7 +939,7 @@ let calWeightLog = { p1: {}, p2: {} };
 let calBurnLog = { p1: {}, p2: {} };
 const CAL_DEFICIT_GOAL = 50000;
 const CAL_KCAL_PER_KG = CAL_DEFICIT_GOAL / 7; // the user's own stated ratio: ~50000 kcal ≈ 7kg
-let calActivePerson = 'p1';
+let calActivePerson = loadActivePerson('calActivePerson');
 let calViewedMonth = null;
 let calSelectedMonthDate = null;
 let calUnsub = null;
@@ -1415,6 +1425,7 @@ function calRenderPersonTabs() {
   tabs.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => {
       calActivePerson = b.dataset.p;
+      saveActivePerson('calActivePerson', calActivePerson);
       calRenderPersonTabs();
       calRenderLogCard();
       calRenderWeightCard();
@@ -2400,7 +2411,7 @@ const PLAN_P2 = {
   }
 };
 
-let trActivePerson = 'p1';
+let trActivePerson = loadActivePerson('trActivePerson');
 let trActiveDay = 'overview';
 let trActiveVariant = 'gym';
 let trTrainingLog = { p1: [], p2: [] };
@@ -2538,6 +2549,7 @@ function trRenderPersonTabs() {
   el.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => {
       trActivePerson = b.dataset.p;
+      saveActivePerson('trActivePerson', trActivePerson);
       const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
       if (!order.includes(trActiveDay)) trActiveDay = 'overview';
       trActiveVariant = 'gym';
