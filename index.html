@@ -90,6 +90,8 @@
   }
   .week-col { border:1px solid var(--border); border-radius:10px; padding:12px; }
   .week-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
+  .streak-badge { font-size:11px; font-weight:600; color:var(--amber-text); background:var(--amber-bg); border:1px solid var(--amber-border); border-radius:100px; padding:2px 8px; white-space:nowrap; }
+  .tr-streak-badge { font-size:12px; font-weight:600; color:var(--amber-text); background:var(--amber-bg); border:1px solid var(--amber-border); border-radius:100px; padding:3px 10px; display:inline-block; margin-bottom:10px; }
   .heatmap { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:12px; }
   .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
   .heat-square { width:100%; aspect-ratio:1; border-radius:5px; background:var(--heat-0); }
@@ -662,6 +664,24 @@ function wkDayDetailText(personKey, dateStr) {
   return label + ' — ' + parts.join('   ');
 }
 
+// Consecutive most-recently-completed weeks (not counting the in-progress current week)
+// with no fine, i.e. every category threshold met. Breaks on the first missed week, or
+// hits the app's data horizon.
+function wkCurrentStreak(person) {
+  let monday = getMonday(new Date());
+  monday.setDate(monday.getDate() - 7);
+  let streak = 0;
+  while (dstr(monday) >= EARLIEST_VISIBLE_WEEK) {
+    const thresholds = wkThresholdsForWeek(monday);
+    const counts = wkCatCountsForWeek(person, monday);
+    const fine = CATS.some(([k]) => counts[k] < thresholds[k]);
+    if (fine) break;
+    streak++;
+    monday.setDate(monday.getDate() - 7);
+  }
+  return streak;
+}
+
 function wkRenderAll() {
   wkRenderThisWeek();
   wkRenderHistory();
@@ -708,8 +728,9 @@ function wkRenderThisWeek() {
       else { status = 'Missed'; cls = 'missed'; fine = true; }
       return `<div class="cat-row"><span class="catname">${label}</span><span><span class="count">${count}/${threshold}</span><span class="status ${cls}">${status}</span></span></div>`;
     }).join('');
+    const streak = wkCurrentStreak(pk);
     return `<div class="week-col">
-      <div class="pname" style="color:var(--${pk})">${name}</div>
+      <div class="pname" style="color:var(--${pk})">${name}${streak > 0 ? ` <span class="streak-badge">&#128293; ${streak} week${streak===1?'':'s'}</span>` : ''}</div>
       ${wkRenderHeatmap(pk, monday)}
       <div class="day-detail" id="wkDayDetail-${pk}">Hover or tap a day above to see what was logged.</div>
       ${rows}
@@ -2078,7 +2099,9 @@ function trExRow([name, reps, url]) {
 }
 
 function trRenderOverview(plan) {
+  const streak = trCurrentStreak(trActivePerson);
   return `
+    ${streak > 0 ? `<div class="tr-streak-badge">&#128293; ${streak} week${streak===1?'':'s'} streak</div>` : ''}
     <h2>Training log calendar</h2>
     <div class="month-nav">
       <button id="trOverviewPrevMonthBtn">&larr;</button>
@@ -2108,6 +2131,28 @@ function trRenderOverview(plan) {
 
 function trLogsForDate(person, dateStr) {
   return (trTrainingLog[person] || []).filter(l => l.date === dateStr);
+}
+
+function trWeekHasActivity(person, weekMonday) {
+  const start = dstr(weekMonday);
+  const sunday = new Date(weekMonday); sunday.setDate(sunday.getDate() + 6);
+  const end = dstr(sunday);
+  const hasWorkout = (trTrainingLog[person] || []).some(l => l.date >= start && l.date <= end);
+  const hasCore = (trCoreLog[person] || []).some(ds => ds >= start && ds <= end);
+  return hasWorkout || hasCore;
+}
+
+// Consecutive weeks (including the current in-progress one, since training is a flexible
+// rotation rather than a daily habit) with at least one logged workout or core session.
+function trCurrentStreak(person) {
+  let monday = getMonday(new Date());
+  let streak = 0;
+  for (let i = 0; i < 52; i++) {
+    if (!trWeekHasActivity(person, monday)) break;
+    streak++;
+    monday.setDate(monday.getDate() - 7);
+  }
+  return streak;
 }
 
 function trDayVariantLabel(l) {
