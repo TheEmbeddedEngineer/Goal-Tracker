@@ -120,6 +120,9 @@
   .sync-status { font-size:12px; color:var(--text-muted); margin:-4px 0 12px; }
   .manual-grid { display:grid; grid-template-columns: 1.5fr 1.5fr 1fr; gap:8px; margin-bottom:8px; }
   .manual-grid.macros { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .recent-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .recent-chip { padding:6px 12px; border:1px solid var(--border-strong); border-radius:100px; background:var(--card); color:var(--text); font-size:12px; cursor:pointer; white-space:nowrap; }
+  .recent-chip:active { transform:scale(0.97); }
   .autocomplete-dropdown { display:none; position:absolute; top:100%; left:0; right:0; background:var(--card); border:1px solid var(--border-strong); border-radius:8px; margin-top:4px; max-height:220px; overflow-y:auto; z-index:10; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
   .autocomplete-dropdown.open { display:block; }
   .autocomplete-item { padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); }
@@ -307,6 +310,7 @@
         <input type="date" id="calDatePicker">
       </div>
 
+      <div class="recent-chips" id="calRecentChips" style="display:none;"></div>
       <div style="position:relative; margin-bottom:8px;">
         <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Food name (English or Deutsch)</label>
         <input type="text" id="foodSearchInput" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
@@ -1435,10 +1439,7 @@ function calDeleteItem(index) {
   calPushToCloud({ skipMerge: true });
 }
 
-function calEditItem(index) {
-  const ds = calSelectedDate();
-  const item = calDayItems(calActivePerson, ds)[index];
-  if (!item) return;
+function calPopulateFormFromItem(item) {
   const bankEntry = calFindInBank(item.name);
   calActiveBankEntry = bankEntry;
   document.getElementById('foodSearchInput').value = bankEntry ? (bankEntry.en + ' / ' + bankEntry.de) : item.name;
@@ -1450,11 +1451,53 @@ function calEditItem(index) {
   document.getElementById('foodCarbs').value = item.carbs;
   document.getElementById('foodFat').value = item.fat;
   document.getElementById('foodCategory').value = item.category || (bankEntry && bankEntry.category) || 'Other';
+  calCloseDropdown();
+}
+
+// Most recently logged distinct foods for this person, newest first — powers the
+// "recent" quick-add chips so a repeat meal doesn't need re-searching.
+function calRecentItems(person, limit) {
+  const days = Object.keys(calEntries[person] || {}).sort().reverse();
+  const seen = new Map();
+  for (const ds of days) {
+    const items = (calEntries[person][ds] || {}).items || [];
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      if (!seen.has(it.name)) seen.set(it.name, it);
+    }
+    if (seen.size >= limit) break;
+  }
+  return Array.from(seen.values()).slice(0, limit);
+}
+
+function calRenderRecentChips() {
+  const el = document.getElementById('calRecentChips');
+  if (!el) return;
+  const items = calRecentItems(calActivePerson, 6);
+  if (items.length === 0) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = items.map((it, i) => `<button type="button" class="recent-chip" data-i="${i}">${it.name}</button>`).join('');
+  el.querySelectorAll('.recent-chip').forEach(btn => {
+    const item = items[parseInt(btn.dataset.i)];
+    btn.addEventListener('click', () => {
+      calEditingIndex = -1;
+      calPopulateFormFromItem(item);
+      document.getElementById('addItemBtn').textContent = 'Add to log';
+      document.getElementById('cancelEditBtn').style.display = 'none';
+      document.getElementById('bankStatus').textContent = 'Loaded from recent — adjust if needed, then Add.';
+    });
+  });
+}
+
+function calEditItem(index) {
+  const ds = calSelectedDate();
+  const item = calDayItems(calActivePerson, ds)[index];
+  if (!item) return;
+  calPopulateFormFromItem(item);
   calEditingIndex = index;
   document.getElementById('addItemBtn').textContent = 'Update log entry';
   document.getElementById('cancelEditBtn').style.display = 'block';
   document.getElementById('bankStatus').textContent = 'Editing this entry — adjust values, then Update (or Cancel).';
-  calCloseDropdown();
 }
 
 // Reuses the same good/inprogress/bad convention as the month calendar: a metric that's
@@ -1498,6 +1541,7 @@ function calFoodItemRowHtml(it, i) {
 function calRenderLogCard() {
   const ds = calSelectedDate();
   const items = calDayItems(calActivePerson, ds);
+  calRenderRecentChips();
   const listEl = document.getElementById('foodItemsList');
   if (items.length === 0) {
     listEl.innerHTML = '<div class="empty" style="color:var(--text-muted); font-size:13px; padding:8px 0;">No food logged for this day yet.</div>';
