@@ -2474,7 +2474,36 @@ function trRenderDay(day, dayKey) {
         </div>`;
       }).join('')}
     </div>
+
+    <div class="section-title" style="margin-top:20px;">Progress</div>
+    <select id="trProgressExercise" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; margin-bottom:4px;">
+      ${list.map((ex, i) => `<option value="${i}">${ex[0]}</option>`).join('')}
+    </select>
+    <div id="trProgressChart"></div>
   `;
+}
+
+function trExerciseProgressPoints(person, dayKey, variant, exerciseName) {
+  return (trTrainingLog[person] || [])
+    .filter(l => l.day === dayKey && l.variant === variant && l.weights[exerciseName] !== undefined)
+    .map(l => ({ date: l.date, value: l.weights[exerciseName] }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function trRenderProgressChart(list) {
+  const select = document.getElementById('trProgressExercise');
+  const chartEl = document.getElementById('trProgressChart');
+  if (!select || !chartEl) return;
+  const exName = list[parseInt(select.value)] ? list[parseInt(select.value)][0] : null;
+  if (!exName) { chartEl.innerHTML = ''; return; }
+  const points = trExerciseProgressPoints(trActivePerson, trActiveDay, trActiveVariant, exName);
+  chartEl.innerHTML = buildTrendChart(points, { color: '--' + trActivePerson, unit: 'kg', detailId: 'trProgressDetail' });
+  chartEl.querySelectorAll('.trend-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const p = points[parseInt(dot.dataset.i)];
+      document.getElementById('trProgressDetail').textContent = `${p.date}: ${p.value}kg`;
+    });
+  });
 }
 
 function trLoadLogIntoForm(dayKey, list, variant) {
@@ -2624,6 +2653,12 @@ function trRenderContent() {
 
     const saveBtn = document.getElementById('saveLogBtn');
     if (saveBtn) saveBtn.addEventListener('click', () => trSaveLog(trActiveDay, list, trActiveVariant));
+
+    const progressSelect = document.getElementById('trProgressExercise');
+    if (progressSelect) {
+      progressSelect.addEventListener('change', () => trRenderProgressChart(list));
+      trRenderProgressChart(list);
+    }
 
     document.querySelectorAll('#trContent .pl-del').forEach(btn => {
       btn.addEventListener('click', (e) => {
