@@ -312,6 +312,7 @@
         <button class="primary" id="weightSaveBtn">Save</button>
       </div>
       <p id="weightLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
+      <div id="weightHistory" style="margin-top:8px;"></div>
     </div>
 
     <div class="card">
@@ -761,7 +762,7 @@ function wkRenderThisWeek() {
     }).join('');
     const streak = wkCurrentStreak(pk);
     return `<div class="week-col">
-      <div class="pname" style="color:var(--${pk})">${name}${streak > 0 ? ` <span class="streak-badge">&#128293; ${streak} week${streak===1?'':'s'}</span>` : ''}</div>
+      <div class="pname" style="color:var(--${pk})">${name}${streak > 0 ? ` <span class="streak-badge" title="Consecutive completed weeks with every category goal met, no fine">&#128293; ${streak}-week no-fine streak</span>` : ''}</div>
       ${wkRenderHeatmap(pk, monday)}
       <div class="day-detail" id="wkDayDetail-${pk}">Hover or tap a day above to see what was logged.</div>
       ${rows}
@@ -932,11 +933,43 @@ function calRenderWeightCard() {
   document.getElementById('weightLatest').textContent = latest
     ? `Latest: ${latest.value}kg on ${latest.date}`
     : 'No weight logged yet.';
+  calRenderWeightHistory();
+}
+
+function calRenderWeightHistory() {
+  const el = document.getElementById('weightHistory');
+  if (!el) return;
+  const entries = Object.entries(calWeightLog[calActivePerson] || {}).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10);
+  if (entries.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = entries.map(([ds, val]) => `
+    <div class="food-item">
+      <span class="fi-name">${ds}</span>
+      <span class="fi-macros">${val}kg</span>
+      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button>
+      <button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
+    </div>
+  `).join('');
+  el.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('weightDate').value = btn.dataset.date;
+      calRenderWeightCard();
+    });
+  });
+  el.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(`Delete the weight entry for ${btn.dataset.date}?`)) return;
+      delete calWeightLog[calActivePerson][btn.dataset.date];
+      try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
+      calRenderWeightCard();
+      calRenderTrendChart();
+      calPushToCloud();
+    });
+  });
 }
 
 function calSaveWeight() {
   const ds = document.getElementById('weightDate').value || todayStr();
-  const val = parseFloat(document.getElementById('weightValue').value);
+  const val = calRound2(parseFloat(document.getElementById('weightValue').value));
   if (isNaN(val) || val <= 0) { alert('Enter a valid weight.'); return; }
   if (!calWeightLog[calActivePerson]) calWeightLog[calActivePerson] = {};
   calWeightLog[calActivePerson][ds] = val;
@@ -1058,6 +1091,7 @@ function calApplyRemoteData(data) {
   try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
+  calRefreshTopFoodsCache();
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
@@ -1217,14 +1251,20 @@ function calDayItems(person, dateStr) {
   return ((calEntries[person] || {})[dateStr] || {}).items || [];
 }
 
+// Binary floating point can't represent most decimals exactly, so repeated addition of
+// values like 0.1 drifts (e.g. 181.10000000003) — round to 2 decimals everywhere a macro
+// value is computed or stored, not just where it's displayed.
+function calRound2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
 function calDayTotals(person, dateStr) {
   const items = calDayItems(person, dateStr);
-  return items.reduce((t, it) => ({
+  const t = items.reduce((t, it) => ({
     calories: t.calories + (it.calories||0),
     protein: t.protein + (it.protein||0),
     carbs: t.carbs + (it.carbs||0),
     fat: t.fat + (it.fat||0)
   }), { calories:0, protein:0, carbs:0, fat:0 });
+  return { calories: calRound2(t.calories), protein: calRound2(t.protein), carbs: calRound2(t.carbs), fat: calRound2(t.fat) };
 }
 
 let calActiveBankEntry = null;
@@ -1306,9 +1346,9 @@ function calFillFromBankEntry(entry, unit, amount) {
   }
   const factor = unit === 'piece' ? (amount || 0) : (amount || 0) / 100;
   document.getElementById('foodCalories').value = Math.round(ref.calories * factor);
-  document.getElementById('foodProtein').value = Math.round(ref.protein * factor * 10) / 10;
-  document.getElementById('foodCarbs').value = Math.round(ref.carbs * factor * 10) / 10;
-  document.getElementById('foodFat').value = Math.round(ref.fat * factor * 10) / 10;
+  document.getElementById('foodProtein').value = calRound2(ref.protein * factor);
+  document.getElementById('foodCarbs').value = calRound2(ref.carbs * factor);
+  document.getElementById('foodFat').value = calRound2(ref.fat * factor);
   document.getElementById('foodCategory').value = entry.category || 'Other';
   statusEl.textContent = '✓ Using "' + entry.en + ' / ' + entry.de + '" — auto-filled for ' + amount + (unit === 'piece' ? ' piece(s).' : 'g.');
 }
@@ -1406,9 +1446,9 @@ function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, 
   const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
   const refData = {
     calories: Math.round(calories * factor),
-    protein: Math.round(protein * factor * 10) / 10,
-    carbs: Math.round(carbs * factor * 10) / 10,
-    fat: Math.round(fat * factor * 10) / 10
+    protein: calRound2(protein * factor),
+    carbs: calRound2(carbs * factor),
+    fat: calRound2(fat * factor)
   };
   let entry = calFindInBank(name);
   if (entry) {
@@ -1432,10 +1472,10 @@ async function calAddItem() {
   const nameEn = name.split('/')[0].trim();
   const unit = document.getElementById('foodUnit').value;
   const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
-  const calories = parseFloat(document.getElementById('foodCalories').value) || 0;
-  const protein = parseFloat(document.getElementById('foodProtein').value) || 0;
-  const carbs = parseFloat(document.getElementById('foodCarbs').value) || 0;
-  const fat = parseFloat(document.getElementById('foodFat').value) || 0;
+  const calories = Math.round(parseFloat(document.getElementById('foodCalories').value) || 0);
+  const protein = calRound2(parseFloat(document.getElementById('foodProtein').value) || 0);
+  const carbs = calRound2(parseFloat(document.getElementById('foodCarbs').value) || 0);
+  const fat = calRound2(parseFloat(document.getElementById('foodFat').value) || 0);
   const category = document.getElementById('foodCategory').value || 'Other';
   const ds = calSelectedDate();
   if (!calEntries[calActivePerson]) calEntries[calActivePerson] = {};
@@ -1478,45 +1518,53 @@ function calPopulateFormFromItem(item) {
   document.getElementById('foodUnit').value = item.unit;
   calUpdateAmountLabel();
   document.getElementById('foodGrams').value = item.grams;
-  document.getElementById('foodCalories').value = item.calories;
-  document.getElementById('foodProtein').value = item.protein;
-  document.getElementById('foodCarbs').value = item.carbs;
-  document.getElementById('foodFat').value = item.fat;
+  document.getElementById('foodCalories').value = Math.round(item.calories);
+  document.getElementById('foodProtein').value = calRound2(item.protein);
+  document.getElementById('foodCarbs').value = calRound2(item.carbs);
+  document.getElementById('foodFat').value = calRound2(item.fat);
   document.getElementById('foodCategory').value = item.category || (bankEntry && bankEntry.category) || 'Other';
   calCloseDropdown();
 }
 
-// Most recently logged distinct foods for this person, newest first — powers the
-// "recent" quick-add chips so a repeat meal doesn't need re-searching.
-function calRecentItems(person, limit) {
-  const days = Object.keys(calEntries[person] || {}).sort().reverse();
-  const seen = new Map();
-  for (const ds of days) {
-    const items = (calEntries[person][ds] || {}).items || [];
-    for (let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      if (!seen.has(it.name)) seen.set(it.name, it);
-    }
-    if (seen.size >= limit) break;
-  }
-  return Array.from(seen.values()).slice(0, limit);
+// Most-logged distinct foods for this person, ranked by how many times they've been
+// logged (not recency). Computed once per page load / remote sync — see calTopFoodsCache
+// — so the quick-add chips stay stable through a session instead of reshuffling after
+// every add.
+function calComputeTopFoods(person, limit) {
+  const counts = new Map();
+  Object.values(calEntries[person] || {}).forEach(day => {
+    (day.items || []).forEach(it => {
+      const entry = counts.get(it.name) || { count: 0, item: it };
+      entry.count++;
+      entry.item = it;
+      counts.set(it.name, entry);
+    });
+  });
+  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+let calTopFoodsCache = { p1: [], p2: [] };
+
+function calRefreshTopFoodsCache() {
+  calTopFoodsCache = { p1: calComputeTopFoods('p1', 10), p2: calComputeTopFoods('p2', 10) };
 }
 
 function calRenderRecentChips() {
   const el = document.getElementById('calRecentChips');
   if (!el) return;
-  const items = calRecentItems(calActivePerson, 6);
-  if (items.length === 0) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  const ranked = calTopFoodsCache[calActivePerson] || [];
+  if (ranked.length === 0) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = items.map((it, i) => `<button type="button" class="recent-chip" data-i="${i}">${it.name}</button>`).join('');
+  el.innerHTML = '<div style="width:100%; font-size:11px; color:var(--text-muted); margin-bottom:2px;">Most logged</div>' +
+    ranked.map((r, i) => `<button type="button" class="recent-chip" data-i="${i}">${r.item.name} <span style="color:var(--text-muted)">&times;${r.count}</span></button>`).join('');
   el.querySelectorAll('.recent-chip').forEach(btn => {
-    const item = items[parseInt(btn.dataset.i)];
+    const item = ranked[parseInt(btn.dataset.i)].item;
     btn.addEventListener('click', () => {
       calEditingIndex = -1;
       calPopulateFormFromItem(item);
       document.getElementById('addItemBtn').textContent = 'Add to log';
       document.getElementById('cancelEditBtn').style.display = 'none';
-      document.getElementById('bankStatus').textContent = 'Loaded from recent — adjust if needed, then Add.';
+      document.getElementById('bankStatus').textContent = 'Loaded — adjust if needed, then Add.';
     });
   });
 }
@@ -1840,6 +1888,7 @@ function calLoadData() {
   const now = new Date();
   calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  calRefreshTopFoodsCache();
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
@@ -2305,7 +2354,7 @@ function trExRow([name, reps, url]) {
 function trRenderOverview(plan) {
   const streak = trCurrentStreak(trActivePerson);
   return `
-    ${streak > 0 ? `<div class="tr-streak-badge">&#128293; ${streak} week${streak===1?'':'s'} streak</div>` : ''}
+    ${streak > 0 ? `<div class="tr-streak-badge" title="Consecutive weeks with ${TR_STREAK_MIN_LOGS}+ workout or core-stability sessions logged">&#128293; ${streak}-week streak (${TR_STREAK_MIN_LOGS}+ sessions every week)</div>` : ''}
     <h2>Training log calendar</h2>
     <div class="month-nav">
       <button id="trOverviewPrevMonthBtn">&larr;</button>
@@ -2337,22 +2386,25 @@ function trLogsForDate(person, dateStr) {
   return (trTrainingLog[person] || []).filter(l => l.date === dateStr);
 }
 
-function trWeekHasActivity(person, weekMonday) {
+const TR_STREAK_MIN_LOGS = 4;
+
+function trWeekLogCount(person, weekMonday) {
   const start = dstr(weekMonday);
   const sunday = new Date(weekMonday); sunday.setDate(sunday.getDate() + 6);
   const end = dstr(sunday);
-  const hasWorkout = (trTrainingLog[person] || []).some(l => l.date >= start && l.date <= end);
-  const hasCore = (trCoreLog[person] || []).some(ds => ds >= start && ds <= end);
-  return hasWorkout || hasCore;
+  const workoutCount = (trTrainingLog[person] || []).filter(l => l.date >= start && l.date <= end).length;
+  const coreCount = (trCoreLog[person] || []).filter(ds => ds >= start && ds <= end).length;
+  return workoutCount + coreCount;
 }
 
 // Consecutive weeks (including the current in-progress one, since training is a flexible
-// rotation rather than a daily habit) with at least one logged workout or core session.
+// rotation rather than a daily habit) with at least TR_STREAK_MIN_LOGS total sessions
+// (workouts + core-stability check-ins combined).
 function trCurrentStreak(person) {
   let monday = getMonday(new Date());
   let streak = 0;
   for (let i = 0; i < 52; i++) {
-    if (!trWeekHasActivity(person, monday)) break;
+    if (trWeekLogCount(person, monday) < TR_STREAK_MIN_LOGS) break;
     streak++;
     monday.setDate(monday.getDate() - 7);
   }
