@@ -6,6 +6,11 @@
 <title>Couple tracker</title>
 <link rel="icon" type="image/png" href="icon-weekly.png">
 <link rel="apple-touch-icon" href="icon-weekly.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#b5622f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Couple tracker">
 <style>
   :root {
     --bg: #faf9f6;
@@ -2825,6 +2830,12 @@ try {
   initialTab = params.get('tab') || localStorage.getItem('activeTab') || 'weekly';
 } catch (err) {}
 showTab(initialTab);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>
