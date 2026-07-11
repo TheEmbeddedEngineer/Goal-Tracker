@@ -179,6 +179,8 @@
   .trend-chart { width:100%; height:auto; margin-top:8px; }
   .trend-dot { cursor:pointer; }
   .trend-detail { font-size:12px; color:var(--text-secondary); margin-top:6px; min-height:16px; }
+  #weightHistory { display:none; }
+  #weightHistory.open { display:block; }
   .recap-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; font-size:13px; border-bottom:1px solid var(--border); }
   .recap-row:last-child { border-bottom:none; }
   .recap-row .rname { color:var(--text-secondary); }
@@ -1783,8 +1785,10 @@ function buildTrendChart(points, opts) {
 
   const linePoints = points.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const dots = points.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3.5" fill="var(${opts.color})" data-i="${i}" class="trend-dot"></circle>`).join('');
+  const goalY = opts.goal != null ? y(opts.goal) : null;
   const goalLine = opts.goal != null
-    ? `<line x1="${padL}" y1="${y(opts.goal).toFixed(1)}" x2="${width - padR}" y2="${y(opts.goal).toFixed(1)}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="4,3"></line>`
+    ? `<line x1="${padL}" y1="${goalY.toFixed(1)}" x2="${width - padR}" y2="${goalY.toFixed(1)}" stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="5,3"></line>
+       <text x="${width - padR}" y="${(goalY - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary)" text-anchor="end">Goal: ${opts.goal}${opts.unit || ''}</text>`
     : '';
 
   return `
@@ -1808,7 +1812,8 @@ function calRenderTrendChart() {
   if (!el) return;
   const metric = calTrendMetric;
   const points = calTrendPoints(calActivePerson, metric, 30);
-  const goal = metric === 'calories' ? calGoals.calories : metric === 'protein' ? calGoals.protein : null;
+  const personGoals = calGoals[calActivePerson] || {};
+  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : null;
   const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : 'kg';
   el.innerHTML = buildTrendChart(points, { color: '--' + calActivePerson, goal, unit, detailId: 'calTrendDetail' });
   el.querySelectorAll('.trend-dot').forEach(dot => {
@@ -1897,6 +1902,15 @@ function calLoadData() {
 
 document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
+
+document.getElementById('weightDate').addEventListener('focus', () => {
+  document.getElementById('weightHistory').classList.add('open');
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#weightDate') && !e.target.closest('#weightHistory')) {
+    document.getElementById('weightHistory').classList.remove('open');
+  }
+});
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
