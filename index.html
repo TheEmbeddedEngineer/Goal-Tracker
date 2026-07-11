@@ -2142,55 +2142,67 @@ const DAY_LABELS_TR = { overview: 'Overview', day1: 'Day 1', day2: 'Day 2', day3
 const PLAN_P1 = {
   dayOrder: ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'],
   overview: {
-    goal: 'Upper-body focus while maintaining lower body, muscle maintenance/build + fat loss, better conditioning, compatible with playing tennis on unpredictable days.',
+    goal: 'Upper-body focus while maintaining lower body, muscle maintenance/build + fat loss, better conditioning, compatible with playing tennis on unpredictable days. As of July 2026: layered with a growth specialization — chest, side delts, rear delts, arms (biceps/triceps), and abs are now dosed specifically for size, not just maintenance.',
     rules: [
       'Tennis days vary week to week, so this is a <strong>rotation, not a fixed weekly calendar</strong> — do the 5 days in any order that fits your week.',
       '<strong>Played tennis today or yesterday?</strong> Skip Day 3 (legs) or Day 5 (conditioning) that session — do an upper day instead. Tennis already loads legs and cardio hard.',
       '<strong>Avoid two upper days back-to-back</strong> where possible, so shoulders and elbows get at least a day between sessions.',
-      '<strong>Every upper day opens with 5 minutes of rotator cuff / shoulder prehab</strong> — serves and overhead shots load the same joints as pressing.'
+      '<strong>Every upper day opens with 5 minutes of rotator cuff / shoulder prehab</strong> — serves and overhead shots load the same joints as pressing.',
+      '<strong>Growth-focused isolation work (flyes, lateral raises, curls, extensions, ab work) is meant to be taken close to failure</strong> (0-2 reps in reserve). Compound lifts stay at 2-3 reps in reserve on most sets to protect recovery and joints.'
     ],
     frequency: [
-      ['Chest', 'Day 1, Day 4', '2x'],
-      ['Shoulders', 'Day 1, Day 4 (+ light touch Day 5)', '2-3x'],
+      ['Chest', 'Day 1, Day 4', '2x — now includes a stretch-focused flye, ~13 sets/wk (was 10)'],
+      ['Side delts', 'Day 1, Day 4', '2x — upgraded from prehab-heavy to true growth volume, ~11-12 sets/wk (was 6)'],
+      ['Rear delts', 'Day 2, Day 4', '2x — upgraded from prehab-only to dedicated hypertrophy work, ~10 sets/wk'],
       ['Back', 'Day 2, Day 4 (+ Day 5)', '2-3x'],
-      ['Biceps/triceps', 'Day 1, Day 2/4', '2x'],
+      ['Biceps', 'Day 2, Day 4', '2x direct, ~10 sets/wk (was 6) — arm-size specialization'],
+      ['Triceps', 'Day 1, Day 4', '2x direct, ~10 sets/wk (was 6) — arm-size specialization'],
+      ['Abs (loaded)', 'Day 3, Day 5', '2x — new direct hypertrophy work, ~6 sets/wk (was 0)'],
       ['Legs', 'Day 3 only (+ light touch Day 5)', '1x direct']
     ],
     notes: [
       '<strong>Fat loss</strong> comes primarily from nutrition — this training preserves/builds muscle and adds conditioning volume, but the calorie deficit is what drives fat loss.',
       '<strong>Progression:</strong> aim to add a little weight or 1-2 reps per exercise every 1-2 weeks. If you stall for 2+ sessions in a row, hold the weight and focus on form/tempo before pushing again.',
-      '<strong>Med-ball rotational throws and rotational cable chops</strong> double as tennis-specific power work — they mimic trunk rotation used in groundstrokes and serves.'
+      '<strong>Med-ball rotational throws and rotational cable chops</strong> double as tennis-specific power work — they mimic trunk rotation used in groundstrokes and serves.',
+      '<strong>Growth-specialization update (July 2026):</strong> chest, side/rear delts, arms, and abs were re-dosed for size. Day 1, Day 2, and Day 4 run roughly 10-15 min longer than before because of it — that\'s expected.'
     ]
   },
   day1: {
-    title: 'Upper: push strength',
-    duration: '45 min',
+    title: 'Upper: push strength + chest/delt growth',
+    duration: '55-60 min',
     gym: [
       ['Rotator cuff prehab (external rotation)', '3x15', 'https://www.muscleandstrength.com/exercises/cable-external-rotation'],
       ['Barbell bench press', '4x6-8', 'https://www.muscleandstrength.com/exercises/barbell-bench-press.html'],
       ['Overhead press', '3x8-10', 'https://www.muscleandstrength.com/exercises/military-press.html'],
       ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
-      ['Cable lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-cable-lateral-raise.html'],
+      ['Cable or pec-deck fly (chest stretch)', '3x12-15', 'https://www.muscleandstrength.com/exercises/cable-crossover.html'],
+      ['Cable lateral raise', '3x15-20', 'https://www.muscleandstrength.com/exercises/two-arm-cable-lateral-raise.html'],
+      ['Leaning single-arm cable lateral raise', '3x15-20/side', 'https://www.youtube.com/watch?v=lJgOI4RcaJs'],
       ['Triceps rope pushdown', '3x12-15', 'https://www.muscleandstrength.com/exercises/rope-tricep-extension.html']
     ],
     home: [
       ['Dumbbell external rotation', '3x15', 'https://www.muscleandstrength.com/exercises/bench-supported-dumbbell-external-rotation'],
       ['Dumbbell bench press (floor press if no bench)', '4x8-10', 'https://www.muscleandstrength.com/exercises/dumbbell-floor-press.html'],
       ['Dumbbell shoulder press', '3x8-10', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
+      ['Dumbbell fly (flat or slight incline, chest stretch)', '3x12-15', 'https://www.muscleandstrength.com/exercises/flat-bench-dumbbell-fly.html'],
       ['Dumbbell close-grip floor press', '3x10-12', 'https://www.muscleandstrength.com/exercises/close-grip-dumbbell-press.html'],
-      ['Dumbbell lateral raise', '3x12-15', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Dumbbell lateral raise', '3x15-20', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Leaning dumbbell lateral raise (hold a doorframe/post for support)', '3x15-20/side', 'https://www.youtube.com/watch?v=lJgOI4RcaJs'],
       ['Dumbbell overhead triceps extension', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-dumbbell-extension.html']
-    ]
+    ],
+    footnote: 'New this cycle: the fly and the leaning lateral raise. Both are there specifically to grow chest and side delts rather than just maintain them — take these two closer to failure (0-2 reps in reserve) since they\'re isolation work, not compound lifts.'
   },
   day2: {
-    title: 'Upper: pull strength',
-    duration: '45 min',
+    title: 'Upper: pull strength + rear delt/bicep growth',
+    duration: '55 min',
     gym: [
       ['Rotator cuff prehab (band pull-apart)', '3x15', 'https://www.muscleandstrength.com/exercises/supinated-90-degree-band-pull-apart'],
       ['Weighted pull-ups / lat pulldown', '4x8-10', 'https://www.muscleandstrength.com/exercises/lat-pull-down.html'],
       ['Seated cable row', '3x10-12', 'https://www.muscleandstrength.com/exercises/seated-row.html'],
       ['Chest-supported dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
+      ['Reverse pec-deck fly (rear delt, growth-focused)', '3x12-15', 'https://www.muscleandstrength.com/exercises/reverse-machine-fly.html'],
       ['Face pulls', '3x15', 'https://www.muscleandstrength.com/exercises/cable-face-pull'],
+      ['Incline dumbbell curl (long-head stretch)', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-curl.html'],
       ['Preacher curl', '3x12', 'https://www.muscleandstrength.com/exercises/preacher-curl.html']
     ],
     home: [
@@ -2198,21 +2210,23 @@ const PLAN_P1 = {
       ['Heavy single-arm dumbbell row (main pull movement)', '4x8-10/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
       ['Two-arm bent-over dumbbell row', '3x10-12', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-row.html'],
       ['Chest-supported row lying face-down on a bench', '3x10-12', 'https://www.muscleandstrength.com/exercises/chest-supported-dumbbell-row'],
-      ['Dumbbell reverse fly, wide grip', '3x15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Dumbbell rear delt fly, wide grip (heavier, growth-focused)', '3x12-15', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Incline dumbbell curl (long-head stretch)', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-curl.html'],
       ['Dumbbell concentration curl', '3x12', 'https://www.muscleandstrength.com/exercises/concentration-cur.html']
     ],
-    footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows.'
+    footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows. New this cycle: the reverse pec-deck/heavier rear-delt fly and the incline curl — both dosed to grow, not just maintain.'
   },
   day3: {
     title: 'Lower body + rotational core',
-    duration: '40 min',
+    duration: '45 min',
     gym: [
       ['Leg Press', '4x10', 'https://www.muscleandstrength.com/exercises/45-degree-leg-press.html'],
       ['Lying Leg Curl', '3x12', 'https://www.muscleandstrength.com/exercises/leg-curl.html'],
       ['Walking Lunges', '8/side', 'https://www.muscleandstrength.com/exercises/dumbbell-walking-lunge.html'],
       ['Abductor', '3x12', 'https://www.muscleandstrength.com/exercises/hip-abduction-machine.html'],
       ['Adductor', '3x12', 'https://www.muscleandstrength.com/exercises/hip-adduction-machine.html'],
-      ['Back extension', '3x15', 'https://www.muscleandstrength.com/exercises/hyperextension.html']
+      ['Back extension', '3x15', 'https://www.muscleandstrength.com/exercises/hyperextension.html'],
+      ['Cable crunch (loaded ab growth)', '3x12-15', 'https://www.muscleandstrength.com/exercises/cable-crunch.html']
     ],
     home: [
       ['Dumbbell goblet squat', '4x10', 'https://www.muscleandstrength.com/exercises/dumbbell-goblet-squat'],
@@ -2220,46 +2234,52 @@ const PLAN_P1 = {
       ['Dumbbell walking lunges', '8/side', 'https://www.muscleandstrength.com/exercises/dumbbell-walking-lunge.html'],
       ['Side-lying clam (band around knees if you have one)', '3x12/side', 'https://www.muscleandstrength.com/exercises/side-lying-clam'],
       ['Dumbbell sumo squat (inner thigh)', '3x12', 'https://www.muscleandstrength.com/exercises/sumo-squat.html'],
-      ['Superman', '3x15', 'https://www.muscleandstrength.com/exercises/superman']
-    ]
+      ['Superman', '3x15', 'https://www.muscleandstrength.com/exercises/superman'],
+      ['Weighted crunch (hold a dumbbell or plate on your chest, loaded ab growth)', '3x12-15', 'https://www.muscleandstrength.com/exercises/weighted-crunch.html']
+    ],
+    footnote: 'New this cycle: the crunch at the end. It\'s loaded and taken close to failure — unlike the rotational/anti-rotation work elsewhere in the plan, this one is specifically there to grow the abs, not just stabilize the spine.'
   },
   day4: {
-    title: 'Upper: hypertrophy + finisher',
-    duration: '45-50 min',
+    title: 'Upper: hypertrophy + arm/delt finisher',
+    duration: '50-55 min',
     gym: [
       ['Incline dumbbell press', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
       ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
       ['Single-arm lat pulldown', '3x10-12/side', 'https://www.youtube.com/watch?v=eM162KNncD8'],
-      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
-      ['Hammer curl + skull crusher (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/standing-hammer-curl.html'],
+      ['Lateral raise + rear delt fly (superset)', '4x15 each', 'https://www.muscleandstrength.com/exercises/dumbbell-lateral-raise.html'],
+      ['Hammer curl + skull crusher (superset)', '4x12 each', 'https://www.muscleandstrength.com/exercises/standing-hammer-curl.html'],
       ['Interval finisher (bike/row)', '10-12 min', null]
     ],
     home: [
       ['Dumbbell incline press (feet elevated, or bench)', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-bench-press.html'],
       ['Dumbbell shoulder press', '3x10-12', 'https://www.muscleandstrength.com/exercises/standing-dumbbell-press.html'],
       ['Single-arm dumbbell row, underhand grip', '3x10-12/side', 'https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html'],
-      ['Lateral raise + rear delt fly (superset)', '3x15 each', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
-      ['Hammer curl + lying dumbbell triceps extension (superset)', '3x12 each', 'https://www.muscleandstrength.com/exercises/lying-dumbbell-extension.html'],
+      ['Lateral raise + rear delt fly (superset)', '4x15 each', 'https://www.muscleandstrength.com/exercises/bent-over-dumbbell-reverse-fly.html'],
+      ['Hammer curl + lying dumbbell triceps extension (superset)', '4x12 each', 'https://www.muscleandstrength.com/exercises/lying-dumbbell-extension.html'],
       ['Interval finisher: burpees, jump rope, or stair sprints', '10-12 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
-    ]
+    ],
+    footnote: 'Both supersets went from 3 to 4 rounds this cycle — this is your second weekly touch for side/rear delts and arms, so it carries real growth-specialization weight, not just a finisher.'
   },
   day5: {
-    title: 'Full body metabolic + conditioning',
-    duration: '35-40 min',
+    title: 'Full body metabolic + conditioning + ab growth',
+    duration: '40-45 min',
     gym: [
       ['Kettlebell swings', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
       ['Push press', '3x8', 'https://www.muscleandstrength.com/exercises/push-press'],
       ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
       ['Med-ball rotational throws', '3x10/side', 'https://www.muscleandstrength.com/exercises/rotational-med-ball-throw'],
-      ['Circuit: sled push / battle ropes / bike sprints', '15 min', null]
+      ['Hanging leg raise (loaded ab growth)', '3x10-15', 'https://www.muscleandstrength.com/exercises/hanging-leg-raise.html'],
+      ['Circuit: sled push / battle ropes / bike sprints', '12-15 min', null]
     ],
     home: [
       ['Single dumbbell swing (hinge, swing between legs)', '4x15', 'https://www.muscleandstrength.com/exercises/kettlebell-swing'],
       ['Dumbbell push press', '3x8', 'https://www.youtube.com/watch?v=B6EOz_LwRqU'],
       ['Renegade rows', '3x10/side', 'https://www.muscleandstrength.com/exercises/renegade-row'],
       ['Weighted Russian twists', '3x15/side', 'https://www.muscleandstrength.com/exercises/weighted-side-touches.html'],
-      ['Bodyweight circuit: burpees, jump squats, mountain climbers, high knees', '15 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
-    ]
+      ['Hanging or lying leg raise (loaded ab growth)', '3x10-15', 'https://www.muscleandstrength.com/exercises/hanging-leg-raise.html'],
+      ['Bodyweight circuit: burpees, jump squats, mountain climbers, high knees', '12-15 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
+    ],
+    footnote: 'New this cycle: the leg raise. Paired with Day 3\'s crunch, this gives abs 2x/week direct loaded volume instead of only rotational/stability work.'
   },
   backcare: {
     intro: 'Tennis loads the lower back through rotation, serving (extension), and lateral movement — if it\'s tight or achy afterward, that\'s usually the surrounding muscles (core, glutes, hips) not doing their share. This builds that support without adding more spinal load. This is general supportive work, not treatment — if pain is sharp, radiates down a leg, comes with numbness/tingling, or persists or worsens over a few days, see a doctor or physiotherapist.',
