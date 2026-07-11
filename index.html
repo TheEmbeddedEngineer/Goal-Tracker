@@ -179,8 +179,7 @@
   .trend-chart { width:100%; height:auto; margin-top:8px; }
   .trend-dot { cursor:pointer; }
   .trend-detail { font-size:12px; color:var(--text-secondary); margin-top:6px; min-height:16px; }
-  #weightHistory { display:none; }
-  #weightHistory.open { display:block; }
+  .weight-week-label { font-size:11px; color:var(--text-muted); margin:8px 0 4px; }
   .recap-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; font-size:13px; border-bottom:1px solid var(--border); }
   .recap-row:last-child { border-bottom:none; }
   .recap-row .rname { color:var(--text-secondary); }
@@ -314,7 +313,8 @@
         <button class="primary" id="weightSaveBtn">Save</button>
       </div>
       <p id="weightLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
-      <div id="weightHistory" style="margin-top:8px;"></div>
+      <div class="weight-week-label" id="weightWeekLabel"></div>
+      <div id="weightHistory"></div>
     </div>
 
     <div class="card">
@@ -938,19 +938,31 @@ function calRenderWeightCard() {
   calRenderWeightHistory();
 }
 
+// Shows the Mon-Sun week containing whichever date is currently picked, not a flat list
+// of the most recent entries — scrolling the date picker browses week by week.
 function calRenderWeightHistory() {
   const el = document.getElementById('weightHistory');
   if (!el) return;
-  const entries = Object.entries(calWeightLog[calActivePerson] || {}).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10);
-  if (entries.length === 0) { el.innerHTML = ''; return; }
-  el.innerHTML = entries.map(([ds, val]) => `
+  const selectedDate = document.getElementById('weightDate').value || todayStr();
+  const monday = getMonday(parseDate(selectedDate));
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  const label = document.getElementById('weightWeekLabel');
+  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
+
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    rows.push(dstr(d));
+  }
+  el.innerHTML = rows.map(ds => {
+    const val = (calWeightLog[calActivePerson] || {})[ds];
+    return `
     <div class="food-item">
       <span class="fi-name">${ds}</span>
-      <span class="fi-macros">${val}kg</span>
-      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button>
-      <button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
-    </div>
-  `).join('');
+      <span class="fi-macros">${val !== undefined ? val + 'kg' : '—'}</span>
+      ${val !== undefined ? `<button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>` : ''}
+    </div>`;
+  }).join('');
   el.querySelectorAll('.fi-edit').forEach(btn => {
     btn.addEventListener('click', () => {
       document.getElementById('weightDate').value = btn.dataset.date;
@@ -1902,15 +1914,6 @@ function calLoadData() {
 
 document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
-
-document.getElementById('weightDate').addEventListener('focus', () => {
-  document.getElementById('weightHistory').classList.add('open');
-});
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#weightDate') && !e.target.closest('#weightHistory')) {
-    document.getElementById('weightHistory').classList.remove('open');
-  }
-});
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
