@@ -288,6 +288,16 @@
     </div>
 
     <div class="card">
+      <h2>Weight</h2>
+      <div class="core-log-row">
+        <input type="date" id="weightDate">
+        <input type="number" id="weightValue" min="0" step="0.1" placeholder="kg" style="width:90px; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+        <button class="primary" id="weightSaveBtn">Save</button>
+      </div>
+      <p id="weightLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
+    </div>
+
+    <div class="card">
       <h2>Log food</h2>
       <div class="person-tabs" id="calPersonTabs"></div>
       <div class="date-picker-row">
@@ -839,6 +849,9 @@ let calGoals = { p1: { calories: 2000, protein: 120 }, p2: { calories: 2000, pro
 // editing goals later doesn't retroactively change how already-logged days evaluate.
 let calDailyGoals = {};
 let calFoodBank = [];
+// Body weight log, keyed by person -> date -> kg. A plain map (no arrays), so it's
+// already safe under Firestore's merge:true without any extra merge-before-push logic.
+let calWeightLog = { p1: {}, p2: {} };
 let calActivePerson = 'p1';
 let calViewedMonth = null;
 let calSelectedMonthDate = null;
@@ -847,6 +860,37 @@ let calApplyingRemote = false;
 
 function calGoalsForDay(dateStr) {
   return calDailyGoals[dateStr] || calGoals;
+}
+
+function calLatestWeight(person) {
+  const days = Object.keys(calWeightLog[person] || {}).sort();
+  if (!days.length) return null;
+  const last = days[days.length - 1];
+  return { date: last, value: calWeightLog[person][last] };
+}
+
+function calRenderWeightCard() {
+  const dateInput = document.getElementById('weightDate');
+  if (!dateInput.value) dateInput.value = todayStr();
+  dateInput.max = todayStr();
+  const ds = dateInput.value;
+  const existing = (calWeightLog[calActivePerson] || {})[ds];
+  document.getElementById('weightValue').value = existing !== undefined ? existing : '';
+  const latest = calLatestWeight(calActivePerson);
+  document.getElementById('weightLatest').textContent = latest
+    ? `Latest: ${latest.value}kg on ${latest.date}`
+    : 'No weight logged yet.';
+}
+
+function calSaveWeight() {
+  const ds = document.getElementById('weightDate').value || todayStr();
+  const val = parseFloat(document.getElementById('weightValue').value);
+  if (isNaN(val) || val <= 0) { alert('Enter a valid weight.'); return; }
+  if (!calWeightLog[calActivePerson]) calWeightLog[calActivePerson] = {};
+  calWeightLog[calActivePerson][ds] = val;
+  try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
+  calRenderWeightCard();
+  calPushToCloud();
 }
 
 function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
@@ -953,14 +997,17 @@ function calApplyRemoteData(data) {
   }
   calDailyGoals = data.dailyGoals || {};
   calFoodBank = data.foodBank || [];
+  calWeightLog = data.weightLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
   try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+  try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
   calRenderPersonTabs();
   calRenderAll();
+  calRenderWeightCard();
   calApplyingRemote = false;
   calApplyLegacyFixes();
 }
@@ -1043,10 +1090,12 @@ async function calPushToCloud(opts = {}) {
       entries: calEntries,
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
       dailyGoals: calDailyGoals,
-      foodBank: calFoodBank
+      foodBank: calFoodBank,
+      weightLog: calWeightLog
     }, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
     try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+    try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
     calRenderLogCard();
     calRenderMonth();
   } catch (err) {
@@ -1102,6 +1151,7 @@ function calRenderPersonTabs() {
       calActivePerson = b.dataset.p;
       calRenderPersonTabs();
       calRenderLogCard();
+      calRenderWeightCard();
     });
   });
 }
@@ -1558,19 +1608,29 @@ function calLoadData() {
   } catch (err) {}
   try { calDailyGoals = JSON.parse(localStorage.getItem('calorie_dailyGoals') || '{}'); } catch (err) { calDailyGoals = {}; }
   try { calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { calFoodBank = []; }
+  try {
+    calWeightLog = JSON.parse(localStorage.getItem('calorie_weightLog') || '{}');
+    calWeightLog.p1 = calWeightLog.p1 || {};
+    calWeightLog.p2 = calWeightLog.p2 || {};
+  } catch (err) { calWeightLog = { p1: {}, p2: {} }; }
 
   calPopulateCategorySelect();
   calPopulateGoalsInputs();
   document.getElementById('calDatePicker').value = todayStr();
   document.getElementById('calDatePicker').max = todayStr();
+  document.getElementById('weightDate').value = todayStr();
 
   const now = new Date();
   calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   calRenderPersonTabs();
   calRenderAll();
+  calRenderWeightCard();
   calApplyLegacyFixes();
 }
+
+document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
+document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
