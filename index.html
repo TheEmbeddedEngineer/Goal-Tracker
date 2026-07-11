@@ -947,13 +947,19 @@ function calRenderWeightHistory() {
   const monday = getMonday(parseDate(selectedDate));
   const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
   const label = document.getElementById('weightWeekLabel');
-  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
 
   const rows = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday); d.setDate(d.getDate() + i);
     rows.push(dstr(d));
   }
+  const hasAny = rows.some(ds => (calWeightLog[calActivePerson] || {})[ds] !== undefined);
+  if (!hasAny) {
+    if (label) label.textContent = '';
+    el.innerHTML = '';
+    return;
+  }
+  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
   el.innerHTML = rows.map(ds => {
     const val = (calWeightLog[calActivePerson] || {})[ds];
     return `
