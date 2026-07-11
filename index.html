@@ -306,6 +306,23 @@
     </div>
 
     <div class="card">
+      <h2>Deficit progress</h2>
+      <div id="calDeficitBig"></div>
+    </div>
+
+    <div class="card">
+      <h2>Calories Burned</h2>
+      <div class="core-log-row">
+        <input type="date" id="burnDate">
+        <input type="number" id="burnValue" min="0" step="1" placeholder="kcal" style="width:90px; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+        <button class="primary" id="burnSaveBtn">Save</button>
+      </div>
+      <p id="burnLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
+      <div class="weight-week-label" id="burnWeekLabel"></div>
+      <div id="burnHistory"></div>
+    </div>
+
+    <div class="card">
       <h2>Weight</h2>
       <div class="core-log-row">
         <input type="date" id="weightDate">
@@ -907,6 +924,11 @@ let calFoodBank = [];
 // Body weight log, keyed by person -> date -> kg. A plain map (no arrays), so it's
 // already safe under Firestore's merge:true without any extra merge-before-push logic.
 let calWeightLog = { p1: {}, p2: {} };
+// Total calories burned that day (e.g. from a fitness tracker's TDEE reading) — same
+// shape and sync-safety as calWeightLog.
+let calBurnLog = { p1: {}, p2: {} };
+const CAL_DEFICIT_GOAL = 50000;
+const CAL_KCAL_PER_KG = CAL_DEFICIT_GOAL / 7; // the user's own stated ratio: ~50000 kcal ≈ 7kg
 let calActivePerson = 'p1';
 let calViewedMonth = null;
 let calSelectedMonthDate = null;
@@ -997,6 +1019,136 @@ function calSaveWeight() {
   calRenderWeightCard();
   calRenderTrendChart();
   calPushToCloud();
+}
+
+function calLatestBurn(person) {
+  const days = Object.keys(calBurnLog[person] || {}).sort();
+  if (!days.length) return null;
+  const last = days[days.length - 1];
+  return { date: last, value: calBurnLog[person][last] };
+}
+
+function calRenderBurnCard() {
+  const dateInput = document.getElementById('burnDate');
+  if (!dateInput.value) dateInput.value = todayStr();
+  dateInput.max = todayStr();
+  const ds = dateInput.value;
+  const existing = (calBurnLog[calActivePerson] || {})[ds];
+  document.getElementById('burnValue').value = existing !== undefined ? existing : '';
+  const latest = calLatestBurn(calActivePerson);
+  document.getElementById('burnLatest').textContent = latest
+    ? `Latest: ${latest.value} kcal on ${latest.date}`
+    : 'No calories burned logged yet.';
+  calRenderBurnHistory();
+  calRenderDeficitCard();
+}
+
+// Same week-scoped pattern as the weight history: only the Mon-Sun week containing the
+// selected date, only days that actually have an entry.
+function calRenderBurnHistory() {
+  const el = document.getElementById('burnHistory');
+  if (!el) return;
+  const selectedDate = document.getElementById('burnDate').value || todayStr();
+  const monday = getMonday(parseDate(selectedDate));
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  const label = document.getElementById('burnWeekLabel');
+
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    rows.push(dstr(d));
+  }
+  const loggedDays = rows.filter(ds => (calBurnLog[calActivePerson] || {})[ds] !== undefined);
+  if (loggedDays.length === 0) {
+    if (label) label.textContent = '';
+    el.innerHTML = '';
+    return;
+  }
+  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
+  el.innerHTML = loggedDays.map(ds => {
+    const val = calBurnLog[calActivePerson][ds];
+    return `
+    <div class="food-item">
+      <span class="fi-name">${ds}</span>
+      <span class="fi-macros">${val} kcal</span>
+      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('burnDate').value = btn.dataset.date;
+      calRenderBurnCard();
+    });
+  });
+  el.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(`Delete the calories-burned entry for ${btn.dataset.date}?`)) return;
+      delete calBurnLog[calActivePerson][btn.dataset.date];
+      try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
+      calRenderBurnCard();
+      calPushToCloud();
+    });
+  });
+}
+
+function calSaveBurn() {
+  const ds = document.getElementById('burnDate').value || todayStr();
+  const val = Math.round(parseFloat(document.getElementById('burnValue').value));
+  if (isNaN(val) || val <= 0) { alert('Enter a valid calorie amount.'); return; }
+  if (!calBurnLog[calActivePerson]) calBurnLog[calActivePerson] = {};
+  calBurnLog[calActivePerson][ds] = val;
+  try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
+  calRenderBurnCard();
+  calPushToCloud();
+}
+
+// Deficit = calories burned (total daily expenditure) - calories eaten. Only counted for
+// days that have BOTH a burn entry and logged food — without both, there's nothing
+// meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
+function calDailyDeficit(person, ds) {
+  const burned = (calBurnLog[person] || {})[ds];
+  if (burned === undefined) return null;
+  if (calDayItems(person, ds).length === 0) return null;
+  return burned - calDayTotals(person, ds).calories;
+}
+
+function calWeekDeficit(person, weekMonday) {
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekMonday); d.setDate(d.getDate() + i);
+    const deficit = calDailyDeficit(person, dstr(d));
+    if (deficit !== null) total += deficit;
+  }
+  return total;
+}
+
+function calCumulativeDeficit(person) {
+  const days = new Set([...Object.keys(calBurnLog[person] || {}), ...Object.keys(calEntries[person] || {})]);
+  let total = 0;
+  days.forEach(ds => {
+    const deficit = calDailyDeficit(person, ds);
+    if (deficit !== null) total += deficit;
+  });
+  return total;
+}
+
+function calRenderDeficitCard() {
+  const el = document.getElementById('calDeficitBig');
+  if (!el) return;
+  const total = calCumulativeDeficit(calActivePerson);
+  const weekTotal = calWeekDeficit(calActivePerson, getMonday(new Date()));
+  const pct = Math.max(0, Math.min(100, (total / CAL_DEFICIT_GOAL) * 100));
+  const kg = total / CAL_KCAL_PER_KG;
+  el.innerHTML = `
+    <div style="text-align:center; padding:8px 0;">
+      <div style="font-size:36px; font-weight:700; color:var(--${calActivePerson});">${Math.round(total).toLocaleString()}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">of ${CAL_DEFICIT_GOAL.toLocaleString()} kcal deficit &middot; &asymp; ${kg.toFixed(1)}kg lost</div>
+      <div style="height:10px; background:var(--border); border-radius:100px; overflow:hidden;">
+        <div style="height:100%; width:${pct}%; background:var(--${calActivePerson}); border-radius:100px;"></div>
+      </div>
+    </div>
+    <div class="recap-row"><span class="rname">This week's deficit</span><span class="rvalue">${Math.round(weekTotal).toLocaleString()} kcal</span></div>
+  `;
 }
 
 function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
@@ -1104,6 +1256,7 @@ function calApplyRemoteData(data) {
   calDailyGoals = data.dailyGoals || {};
   calFoodBank = data.foodBank || [];
   calWeightLog = data.weightLog || { p1: {}, p2: {} };
+  calBurnLog = data.burnLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
@@ -1111,10 +1264,12 @@ function calApplyRemoteData(data) {
   try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
+  try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
   calRefreshTopFoodsCache();
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
+  calRenderBurnCard();
   calApplyingRemote = false;
   calApplyLegacyFixes();
 }
@@ -1198,14 +1353,17 @@ async function calPushToCloud(opts = {}) {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
       dailyGoals: calDailyGoals,
       foodBank: calFoodBank,
-      weightLog: calWeightLog
+      weightLog: calWeightLog,
+      burnLog: calBurnLog
     }, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
     try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
     try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
+    try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
     calRenderLogCard();
     calRenderMonth();
     calRenderTrendChart();
+    calRenderDeficitCard();
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (calories): could not save');
@@ -1260,6 +1418,7 @@ function calRenderPersonTabs() {
       calRenderPersonTabs();
       calRenderLogCard();
       calRenderWeightCard();
+      calRenderBurnCard();
       calRenderTrendChart();
     });
   });
@@ -1514,6 +1673,7 @@ async function calAddItem() {
   calRenderLogCard();
   calRenderMonth();
   calRenderTrendChart();
+  calRenderDeficitCard();
   // Editing replaces a specific item in place, so trust the local result rather than
   // merging (a stale remote copy could otherwise resurrect the pre-edit version).
   calPushToCloud({ skipMerge: wasEditing });
@@ -1528,6 +1688,7 @@ function calDeleteItem(index) {
   calRenderLogCard();
   calRenderMonth();
   calRenderTrendChart();
+  calRenderDeficitCard();
   calPushToCloud({ skipMerge: true });
 }
 
@@ -1757,6 +1918,7 @@ function calRenderMonth() {
       calRenderMonth();
       calRenderTrendChart();
       calRenderWeightCard();
+      calRenderBurnCard();
       document.getElementById('foodItemsList').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
@@ -1886,6 +2048,7 @@ function calRenderAll() {
   calRenderLogCard();
   calRenderMonth();
   calRenderTrendChart();
+  calRenderDeficitCard();
 }
 
 function calLoadData() {
@@ -1901,12 +2064,18 @@ function calLoadData() {
     calWeightLog.p1 = calWeightLog.p1 || {};
     calWeightLog.p2 = calWeightLog.p2 || {};
   } catch (err) { calWeightLog = { p1: {}, p2: {} }; }
+  try {
+    calBurnLog = JSON.parse(localStorage.getItem('calorie_burnLog') || '{}');
+    calBurnLog.p1 = calBurnLog.p1 || {};
+    calBurnLog.p2 = calBurnLog.p2 || {};
+  } catch (err) { calBurnLog = { p1: {}, p2: {} }; }
 
   calPopulateCategorySelect();
   calPopulateGoalsInputs();
   document.getElementById('calDatePicker').value = todayStr();
   document.getElementById('calDatePicker').max = todayStr();
   document.getElementById('weightDate').value = todayStr();
+  document.getElementById('burnDate').value = todayStr();
 
   const now = new Date();
   calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1915,11 +2084,14 @@ function calLoadData() {
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
+  calRenderBurnCard();
   calApplyLegacyFixes();
 }
 
 document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
+document.getElementById('burnDate').addEventListener('change', calRenderBurnCard);
+document.getElementById('burnSaveBtn').addEventListener('click', calSaveBurn);
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
