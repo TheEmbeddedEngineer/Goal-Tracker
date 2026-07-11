@@ -953,20 +953,20 @@ function calRenderWeightHistory() {
     const d = new Date(monday); d.setDate(d.getDate() + i);
     rows.push(dstr(d));
   }
-  const hasAny = rows.some(ds => (calWeightLog[calActivePerson] || {})[ds] !== undefined);
-  if (!hasAny) {
+  const loggedDays = rows.filter(ds => (calWeightLog[calActivePerson] || {})[ds] !== undefined);
+  if (loggedDays.length === 0) {
     if (label) label.textContent = '';
     el.innerHTML = '';
     return;
   }
   if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
-  el.innerHTML = rows.map(ds => {
-    const val = (calWeightLog[calActivePerson] || {})[ds];
+  el.innerHTML = loggedDays.map(ds => {
+    const val = calWeightLog[calActivePerson][ds];
     return `
     <div class="food-item">
       <span class="fi-name">${ds}</span>
-      <span class="fi-macros">${val !== undefined ? val + 'kg' : '—'}</span>
-      ${val !== undefined ? `<button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>` : ''}
+      <span class="fi-macros">${val}kg</span>
+      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
     </div>`;
   }).join('');
   el.querySelectorAll('.fi-edit').forEach(btn => {
