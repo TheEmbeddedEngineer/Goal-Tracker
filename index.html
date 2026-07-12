@@ -359,6 +359,10 @@
         <div><label>Carbs (g)</label><input type="number" id="foodCarbs" min="0"></div>
         <div><label>Fat (g)</label><input type="number" id="foodFat" min="0"></div>
       </div>
+      <label class="core-check-inline" style="margin-bottom:8px;" title="When locked, changing the numbers above only affects this one log entry — the food bank's saved values stay as they are. Uncheck to also update the bank.">
+        <input type="checkbox" id="foodLocked" checked>
+        <span>Locked (don't update food bank)</span>
+      </label>
       <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Not in our bank? Search on Google &rarr;</button>
       <button class="primary" id="addItemBtn">Add to log</button>
       <button type="button" class="link-btn" id="cancelEditBtn" style="display:none; width:100%; text-align:center;">Cancel edit</button>
@@ -1711,6 +1715,7 @@ function calClearManualFields() {
   document.getElementById('foodCarbs').value = '';
   document.getElementById('foodFat').value = '';
   document.getElementById('foodCategory').value = 'Other';
+  document.getElementById('foodLocked').checked = true;
   calActiveBankEntry = null;
   calEditingIndex = -1;
   document.getElementById('addItemBtn').textContent = 'Add to log';
@@ -1772,6 +1777,7 @@ function calUpdateDropdownHighlight() {
 function calFillFromBankEntry(entry, unit, amount) {
   const ref = entry[unit];
   const statusEl = document.getElementById('bankStatus');
+  document.getElementById('foodLocked').checked = entry.locked !== false;
   if (!ref) {
     statusEl.textContent = '"' + entry.en + ' / ' + entry.de + '" has no ' + (unit === 'piece' ? 'per-piece' : 'per-gram') + ' data yet — enter values manually and it’ll be saved for next time.';
     return;
@@ -1891,7 +1897,7 @@ function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, 
     const parts = name.split('/').map(s => s.trim()).filter(Boolean);
     const en = parts[0] || name;
     const de = parts[1] || parts[0] || name;
-    entry = { en, de, preferredUnit: unit, gram: null, piece: null, category };
+    entry = { en, de, preferredUnit: unit, gram: null, piece: null, category, locked: true };
     entry[unit] = refData;
     calFoodBank.push(entry);
   }
@@ -1909,6 +1915,7 @@ async function calAddItem() {
   const carbs = calRound2(parseFloat(document.getElementById('foodCarbs').value) || 0);
   const fat = calRound2(parseFloat(document.getElementById('foodFat').value) || 0);
   const category = document.getElementById('foodCategory').value || 'Other';
+  const locked = document.getElementById('foodLocked').checked;
   const ds = calSelectedDate();
   if (!calEntries[calActivePerson]) calEntries[calActivePerson] = {};
   if (!calEntries[calActivePerson][ds]) calEntries[calActivePerson][ds] = { items: [] };
@@ -1920,7 +1927,12 @@ async function calAddItem() {
   } else {
     items.push(newItem);
   }
-  calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category);
+  // Locked (the default) means this is a one-off tweak — the bank's saved reference
+  // values are left alone. A brand-new food (no bank entry yet) is always saved so
+  // first-time logging still seeds the bank for next time, regardless of the checkbox.
+  if (!calFindInBank(name) || !locked) {
+    calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category);
+  }
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   calClearManualFields();
   calRenderLogCard();
@@ -1958,6 +1970,7 @@ function calPopulateFormFromItem(item) {
   document.getElementById('foodCarbs').value = calRound2(item.carbs);
   document.getElementById('foodFat').value = calRound2(item.fat);
   document.getElementById('foodCategory').value = item.category || (bankEntry && bankEntry.category) || 'Other';
+  document.getElementById('foodLocked').checked = !bankEntry || bankEntry.locked !== false;
   calCloseDropdown();
 }
 
