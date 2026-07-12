@@ -387,18 +387,6 @@
       <div id="weightHistory"></div>
     </div>
 
-    <div class="card" id="stepsCard">
-      <h2>Steps</h2>
-      <div class="core-log-row">
-        <input type="date" id="stepsDate">
-        <input type="number" id="stepsValue" min="0" step="1" placeholder="steps" style="width:90px; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
-        <button class="primary" id="stepsSaveBtn">Save</button>
-      </div>
-      <p id="stepsLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
-      <div class="weight-week-label" id="stepsWeekLabel"></div>
-      <div id="stepsHistory"></div>
-    </div>
-
     <div class="card">
       <div class="month-nav">
         <button id="prevMonthBtn">&larr;</button>
@@ -425,7 +413,6 @@
         <button data-metric="calories" class="active">Calories</button>
         <button data-metric="protein">Protein</button>
         <button data-metric="weight">Weight</button>
-        <button data-metric="steps" id="calTrendStepsTab">Steps</button>
       </div>
       <div id="calTrendChart"></div>
     </div>
@@ -996,11 +983,6 @@ let calWeightLog = { p1: {}, p2: {} };
 // Total calories burned that day (e.g. from a fitness tracker's TDEE reading) — same
 // shape and sync-safety as calWeightLog.
 let calBurnLog = { p1: {}, p2: {} };
-// Daily step count — same shape/sync-safety as calWeightLog/calBurnLog. Personal to p1
-// (requested for himself specifically), so the card only shows when viewing p1 — same
-// scoping as the deficit goal below.
-let calStepsLog = { p1: {}, p2: {} };
-const CAL_STEPS_GOAL = 10000;
 const CAL_DEFICIT_GOAL = 50000;
 const CAL_KCAL_PER_KG = CAL_DEFICIT_GOAL / 7; // the user's own stated ratio: ~50000 kcal ≈ 7kg
 let calActivePerson = loadActivePerson('calActivePerson');
@@ -1226,89 +1208,6 @@ function calSaveBurn() {
   calPushToCloud();
 }
 
-function calLatestSteps(person) {
-  const days = Object.keys(calStepsLog[person] || {}).sort();
-  if (!days.length) return null;
-  const last = days[days.length - 1];
-  return { date: last, value: calStepsLog[person][last] };
-}
-
-function calRenderStepsCard() {
-  const card = document.getElementById('stepsCard');
-  if (card) card.style.display = calActivePerson === 'p1' ? '' : 'none';
-  if (calActivePerson !== 'p1') return;
-  const dateInput = document.getElementById('stepsDate');
-  if (!dateInput.value) dateInput.value = todayStr();
-  dateInput.max = todayStr();
-  const ds = dateInput.value;
-  const existing = (calStepsLog[calActivePerson] || {})[ds];
-  document.getElementById('stepsValue').value = existing !== undefined ? existing : '';
-  const latest = calLatestSteps(calActivePerson);
-  document.getElementById('stepsLatest').textContent = latest
-    ? `Latest: ${latest.value.toLocaleString()} steps on ${latest.date} (goal: ${CAL_STEPS_GOAL.toLocaleString()})`
-    : `No steps logged yet. Goal: ${CAL_STEPS_GOAL.toLocaleString()}/day.`;
-  calRenderStepsHistory();
-}
-
-// Same week-scoped pattern as the weight/burn history: only the Mon-Sun week containing
-// the selected date, only days that actually have an entry.
-function calRenderStepsHistory() {
-  const el = document.getElementById('stepsHistory');
-  if (!el) return;
-  const selectedDate = document.getElementById('stepsDate').value || todayStr();
-  const monday = getMonday(parseDate(selectedDate));
-  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
-  const label = document.getElementById('stepsWeekLabel');
-
-  const rows = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday); d.setDate(d.getDate() + i);
-    rows.push(dstr(d));
-  }
-  const loggedDays = rows.filter(ds => (calStepsLog[calActivePerson] || {})[ds] !== undefined);
-  if (loggedDays.length === 0) {
-    if (label) label.textContent = '';
-    el.innerHTML = '';
-    return;
-  }
-  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
-  el.innerHTML = loggedDays.map(ds => {
-    const val = calStepsLog[calActivePerson][ds];
-    return `
-    <div class="food-item">
-      <span class="fi-name">${ds}</span>
-      <span class="fi-macros">${val.toLocaleString()} steps${val >= CAL_STEPS_GOAL ? ' &#10003;' : ''}</span>
-      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
-    </div>`;
-  }).join('');
-  el.querySelectorAll('.fi-edit').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.getElementById('stepsDate').value = btn.dataset.date;
-      calRenderStepsCard();
-    });
-  });
-  el.querySelectorAll('.fi-del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!confirm(`Delete the steps entry for ${btn.dataset.date}?`)) return;
-      delete calStepsLog[calActivePerson][btn.dataset.date];
-      try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
-      calRenderStepsCard();
-      calPushToCloud();
-    });
-  });
-}
-
-function calSaveSteps() {
-  const ds = document.getElementById('stepsDate').value || todayStr();
-  const val = Math.round(parseFloat(document.getElementById('stepsValue').value));
-  if (isNaN(val) || val <= 0) { alert('Enter a valid step count.'); return; }
-  if (!calStepsLog[calActivePerson]) calStepsLog[calActivePerson] = {};
-  calStepsLog[calActivePerson][ds] = val;
-  try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
-  calRenderStepsCard();
-  calPushToCloud();
-}
-
 // Deficit = calories burned (total daily expenditure) - calories eaten. Only counted for
 // days that have BOTH a burn entry and logged food — without both, there's nothing
 // meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
@@ -1471,7 +1370,6 @@ function calApplyRemoteData(data) {
   calFoodBank = data.foodBank || [];
   calWeightLog = data.weightLog || { p1: {}, p2: {} };
   calBurnLog = data.burnLog || { p1: {}, p2: {} };
-  calStepsLog = data.stepsLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
@@ -1479,13 +1377,11 @@ function calApplyRemoteData(data) {
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
   try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
-  try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
   calRefreshTopFoodsCache();
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
   calRenderBurnCard();
-  calRenderStepsCard();
   calApplyingRemote = false;
   calApplyLegacyFixes();
   if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);
@@ -1632,8 +1528,7 @@ async function calPushToCloud(opts = {}) {
       dailyGoals: calDailyGoals,
       foodBank: calFoodBank,
       weightLog: calWeightLog,
-      burnLog: calBurnLog,
-      stepsLog: calStepsLog
+      burnLog: calBurnLog
     };
     // One-time cleanup: the old schema kept every food log entry ever logged inside this
     // same document, which is what drove it toward Firestore's 1 MiB limit in the first
@@ -1644,7 +1539,6 @@ async function calPushToCloud(opts = {}) {
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
     try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
     try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
-    try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
     calRenderLogCard();
     calRenderMonth();
     calRenderTrendChart();
@@ -1750,7 +1644,6 @@ function calRenderPersonTabs() {
       calRenderLogCard();
       calRenderWeightCard();
       calRenderBurnCard();
-      calRenderStepsCard();
       calRenderTrendChart();
     });
   });
@@ -2279,7 +2172,6 @@ function calRenderMonth() {
       calRenderTrendChart();
       calRenderWeightCard();
       calRenderBurnCard();
-      calRenderStepsCard();
       document.getElementById('foodItemsList').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
@@ -2296,8 +2188,6 @@ function calTrendPoints(person, metric, days) {
     let value;
     if (metric === 'weight') {
       value = (calWeightLog[person] || {})[ds];
-    } else if (metric === 'steps') {
-      value = (calStepsLog[person] || {})[ds];
     } else if (calDayItems(person, ds).length > 0) {
       value = calDayTotals(person, ds)[metric];
     }
@@ -2358,19 +2248,11 @@ function buildTrendChart(points, opts) {
 function calRenderTrendChart() {
   const el = document.getElementById('calTrendChart');
   if (!el) return;
-  // Steps was only requested for p1 — hide that tab for p2, and fall back off it if it
-  // was left selected from switching away from p1.
-  const stepsTab = document.getElementById('calTrendStepsTab');
-  if (stepsTab) stepsTab.style.display = calActivePerson === 'p1' ? '' : 'none';
-  if (calActivePerson !== 'p1' && calTrendMetric === 'steps') {
-    calTrendMetric = 'calories';
-    document.querySelectorAll('#calTrendTabs button').forEach(b => b.classList.toggle('active', b.dataset.metric === 'calories'));
-  }
   const metric = calTrendMetric;
   const points = calTrendPoints(calActivePerson, metric, 30);
   const personGoals = calGoals[calActivePerson] || {};
-  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : metric === 'steps' ? CAL_STEPS_GOAL : null;
-  const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : metric === 'steps' ? '' : 'kg';
+  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : null;
+  const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : 'kg';
   el.innerHTML = buildTrendChart(points, { color: '--' + calActivePerson, goal, unit, detailId: 'calTrendDetail' });
   el.querySelectorAll('.trend-dot').forEach(dot => {
     dot.addEventListener('click', () => {
@@ -2446,11 +2328,6 @@ function calLoadData() {
     calBurnLog.p1 = calBurnLog.p1 || {};
     calBurnLog.p2 = calBurnLog.p2 || {};
   } catch (err) { calBurnLog = { p1: {}, p2: {} }; }
-  try {
-    calStepsLog = JSON.parse(localStorage.getItem('calorie_stepsLog') || '{}');
-    calStepsLog.p1 = calStepsLog.p1 || {};
-    calStepsLog.p2 = calStepsLog.p2 || {};
-  } catch (err) { calStepsLog = { p1: {}, p2: {} }; }
 
   calPopulateCategorySelect();
   calPopulateGoalsInputs();
@@ -2458,7 +2335,6 @@ function calLoadData() {
   document.getElementById('calDatePicker').max = todayStr();
   document.getElementById('weightDate').value = todayStr();
   document.getElementById('burnDate').value = todayStr();
-  document.getElementById('stepsDate').value = todayStr();
 
   const now = new Date();
   calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -2468,7 +2344,6 @@ function calLoadData() {
   calRenderAll();
   calRenderWeightCard();
   calRenderBurnCard();
-  calRenderStepsCard();
   calApplyLegacyFixes();
 }
 
@@ -2476,8 +2351,6 @@ document.getElementById('weightDate').addEventListener('change', calRenderWeight
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
 document.getElementById('burnDate').addEventListener('change', calRenderBurnCard);
 document.getElementById('burnSaveBtn').addEventListener('click', calSaveBurn);
-document.getElementById('stepsDate').addEventListener('change', calRenderStepsCard);
-document.getElementById('stepsSaveBtn').addEventListener('click', calSaveSteps);
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
@@ -2809,6 +2682,12 @@ let trCoreLog = { p1: [], p2: [] };
 // they're standalone efforts, not a finisher tacked onto another workout.
 let trExtraLog = { p1: {}, p2: {} };
 const TR_EXTRA_ACTIVITIES = { p1: ['Tennis'], p2: ['Hyrox', 'Runs'] };
+// Daily step count — person -> date -> number, a plain map (not an array) so it's already
+// safe under Firestore's merge:true without special merge-before-push logic, same as
+// calWeightLog/calBurnLog on the Calories tab. Requested specifically for p1, so the card
+// only shows when viewing him.
+let trStepsLog = { p1: {}, p2: {} };
+const TR_STEPS_GOAL = 10000;
 let trOverviewViewedMonth = null;
 let trOverviewSelectedDate = null;
 let trUnsub = null;
@@ -2853,11 +2732,13 @@ function trApplyRemoteData(data) {
   trTrainingLog = data.trainingLog || { p1: [], p2: [] };
   trCoreLog = data.coreLog || { p1: [], p2: [] };
   trExtraLog = data.extraLog || { p1: {}, p2: {} };
+  trStepsLog = data.stepsLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   try { localStorage.setItem('training_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2 })); } catch (err) {}
   try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
   try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
   try { localStorage.setItem('training_extraLog', JSON.stringify(trExtraLog)); } catch (err) {}
+  try { localStorage.setItem('training_stepsLog', JSON.stringify(trStepsLog)); } catch (err) {}
   trRenderAll();
   trApplyingRemote = false;
   trApplyLegacyExerciseRenames();
@@ -2936,11 +2817,13 @@ async function trPushToCloud(opts = {}) {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
       trainingLog: trTrainingLog,
       coreLog: trCoreLog,
-      extraLog: trExtraLog
+      extraLog: trExtraLog,
+      stepsLog: trStepsLog
     }, writeOpts);
     try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
     try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
     try { localStorage.setItem('training_extraLog', JSON.stringify(trExtraLog)); } catch (err) {}
+    try { localStorage.setItem('training_stepsLog', JSON.stringify(trStepsLog)); } catch (err) {}
     trRenderContent();
   } catch (err) {
     console.error(err);
@@ -3024,6 +2907,19 @@ function trRenderOverview(plan) {
           <button class="primary extra-activity-save" data-activity="${act}">Save</button>
         </div>
       `).join('')}
+    ` : ''}
+
+    ${trActivePerson === 'p1' ? `
+      <div class="section-title">Steps</div>
+      <div class="core-log-row">
+        <input type="date" id="trStepsDate">
+        <input type="number" id="trStepsValue" min="0" step="1" placeholder="steps" style="width:90px; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+        <button class="primary" id="trStepsSaveBtn">Save</button>
+      </div>
+      <p id="trStepsLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
+      <div class="weight-week-label" id="trStepsWeekLabel"></div>
+      <div id="trStepsHistory"></div>
+      <div id="trStepsChart" style="margin-top:10px;"></div>
     ` : ''}
 
     <h2 style="margin-top:20px;">Overview</h2>
@@ -3380,6 +3276,117 @@ function trSaveExtraActivity(activity) {
   trPushToCloud({ skipMerge: !checked });
 }
 
+function trLatestSteps(person) {
+  const days = Object.keys(trStepsLog[person] || {}).sort();
+  if (!days.length) return null;
+  const last = days[days.length - 1];
+  return { date: last, value: trStepsLog[person][last] };
+}
+
+function trRenderStepsCard() {
+  const dateInput = document.getElementById('trStepsDate');
+  if (!dateInput) return;
+  if (!dateInput.value) dateInput.value = todayStr();
+  dateInput.max = todayStr();
+  const ds = dateInput.value;
+  const existing = (trStepsLog.p1 || {})[ds];
+  document.getElementById('trStepsValue').value = existing !== undefined ? existing : '';
+  const latest = trLatestSteps('p1');
+  document.getElementById('trStepsLatest').textContent = latest
+    ? `Latest: ${latest.value.toLocaleString()} steps on ${latest.date} (goal: ${TR_STEPS_GOAL.toLocaleString()})`
+    : `No steps logged yet. Goal: ${TR_STEPS_GOAL.toLocaleString()}/day.`;
+  trRenderStepsHistory();
+  trRenderStepsChart();
+}
+
+// Same week-scoped pattern as the weight/burn history on the Calories tab: only the
+// Mon-Sun week containing the selected date, only days that actually have an entry.
+function trRenderStepsHistory() {
+  const el = document.getElementById('trStepsHistory');
+  if (!el) return;
+  const selectedDate = document.getElementById('trStepsDate').value || todayStr();
+  const monday = getMonday(parseDate(selectedDate));
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  const label = document.getElementById('trStepsWeekLabel');
+
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    rows.push(dstr(d));
+  }
+  const loggedDays = rows.filter(ds => (trStepsLog.p1 || {})[ds] !== undefined);
+  if (loggedDays.length === 0) {
+    if (label) label.textContent = '';
+    el.innerHTML = '';
+    return;
+  }
+  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
+  el.innerHTML = loggedDays.map(ds => {
+    const val = trStepsLog.p1[ds];
+    return `
+    <div class="food-item">
+      <span class="fi-name">${ds}</span>
+      <span class="fi-macros">${val.toLocaleString()} steps${val >= TR_STEPS_GOAL ? ' &#10003;' : ''}</span>
+      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('trStepsDate').value = btn.dataset.date;
+      trRenderStepsCard();
+    });
+  });
+  el.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(`Delete the steps entry for ${btn.dataset.date}?`)) return;
+      delete trStepsLog.p1[btn.dataset.date];
+      try { localStorage.setItem('training_stepsLog', JSON.stringify(trStepsLog)); } catch (err) {}
+      trRenderStepsCard();
+      trPushToCloud();
+    });
+  });
+}
+
+function trStepsPoints(days) {
+  const points = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const ds = dstr(d);
+    const value = (trStepsLog.p1 || {})[ds];
+    if (value !== undefined) points.push({ date: ds, value });
+  }
+  return points;
+}
+
+function trRenderStepsChart() {
+  const el = document.getElementById('trStepsChart');
+  if (!el) return;
+  const points = trStepsPoints(30);
+  el.innerHTML = buildTrendChart(points, { color: '--p1', goal: TR_STEPS_GOAL, unit: '', detailId: 'trStepsChartDetail' });
+  el.querySelectorAll('.trend-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const p = points[parseInt(dot.dataset.i)];
+      const detail = document.getElementById('trStepsChartDetail');
+      if (detail) detail.textContent = `${p.date}: ${p.value.toLocaleString()} steps`;
+    });
+  });
+}
+
+function trSaveSteps() {
+  const dateInput = document.getElementById('trStepsDate');
+  const valueInput = document.getElementById('trStepsValue');
+  if (!dateInput || !valueInput) return;
+  const ds = dateInput.value || todayStr();
+  const val = Math.round(parseFloat(valueInput.value));
+  if (isNaN(val) || val <= 0) { alert('Enter a valid step count.'); return; }
+  if (!trStepsLog.p1) trStepsLog.p1 = {};
+  trStepsLog.p1[ds] = val;
+  try { localStorage.setItem('training_stepsLog', JSON.stringify(trStepsLog)); } catch (err) {}
+  trRenderStepsCard();
+  trPushToCloud();
+}
+
 function trRenderBackCare(bc) {
   return `
     <h2>Back care</h2>
@@ -3438,6 +3445,11 @@ function trRenderContent() {
       const saveBtn = document.querySelector(`.extra-activity-save[data-activity="${act}"]`);
       if (saveBtn) saveBtn.addEventListener('click', () => trSaveExtraActivity(act));
     });
+    if (trActivePerson === 'p1') {
+      document.getElementById('trStepsDate').addEventListener('change', trRenderStepsCard);
+      document.getElementById('trStepsSaveBtn').addEventListener('click', trSaveSteps);
+      trRenderStepsCard();
+    }
   } else if (trActiveDay === 'backcare') {
     contentEl.innerHTML = trRenderBackCare(plan.backcare);
     const coreDateInput = document.getElementById('coreLogDate');
@@ -3533,6 +3545,11 @@ function trLoadData() {
     trExtraLog.p1 = trExtraLog.p1 || {};
     trExtraLog.p2 = trExtraLog.p2 || {};
   } catch (err) { trExtraLog = { p1: {}, p2: {} }; }
+  try {
+    trStepsLog = JSON.parse(localStorage.getItem('training_stepsLog') || '{}');
+    trStepsLog.p1 = trStepsLog.p1 || {};
+    trStepsLog.p2 = trStepsLog.p2 || {};
+  } catch (err) { trStepsLog = { p1: {}, p2: {} }; }
 
   const now = new Date();
   trOverviewViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
