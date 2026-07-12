@@ -2210,9 +2210,13 @@ function calFoodBankRowHtml(entry) {
   const key = entry.de;
   const unitLabel = unit === 'piece' ? 'piece' : '100g';
   if (calBankEditingKey === key) {
+    const attrSafe = s => (s || '').replace(/"/g, '&quot;');
     return `
     <div class="food-item" style="display:block;">
-      <div style="font-size:13px; font-weight:600; margin-bottom:6px;">${entry.en} / ${entry.de}</div>
+      <div class="manual-grid" style="grid-template-columns: 1fr 1fr; margin-bottom:6px;">
+        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">English name</label><input type="text" class="fb-edit-en" value="${attrSafe(entry.en)}"></div>
+        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">German name</label><input type="text" class="fb-edit-de" value="${attrSafe(entry.de)}"></div>
+      </div>
       <select class="fb-edit-category" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; margin-bottom:6px;">
         ${CAL_CATEGORIES.map(c => `<option value="${c}" ${entry.category === c ? 'selected' : ''}>${c}</option>`).join('')}
       </select>
@@ -2279,6 +2283,18 @@ function calRenderFoodBankList() {
 function calSaveFoodBankEdit(key, row) {
   const entry = calFoodBank.find(f => f.de === key);
   if (!entry || !row) return;
+  const newEn = row.querySelector('.fb-edit-en').value.trim();
+  const newDe = row.querySelector('.fb-edit-de').value.trim();
+  if (!newEn || !newDe) { alert('Enter both an English and a German name.'); return; }
+  const dupe = calFoodBank.find(f => f !== entry && (calNormName(f.en) === calNormName(newEn) || calNormName(f.de) === calNormName(newDe)));
+  if (dupe) { alert(`"${dupe.en} / ${dupe.de}" already uses one of those names.`); return; }
+  // Log entries store only the English name at the time they were logged (see calAddItem),
+  // so renaming here doesn't relabel history — past days keep showing the old name. That's
+  // a display-only side effect, not data loss, and matches how exercise renames are handled
+  // in the training tab (see TR_EXERCISE_RENAMES).
+  const deChanged = newDe !== entry.de;
+  entry.en = newEn;
+  entry.de = newDe;
   const unit = entry.preferredUnit || 'gram';
   entry.category = row.querySelector('.fb-edit-category').value;
   entry[unit] = {
@@ -2291,7 +2307,10 @@ function calSaveFoodBankEdit(key, row) {
   calBankEditingKey = null;
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   calRenderFoodBankList();
-  calPushToCloud();
+  // calMergeFoodBank unions by "de" name — if that just changed, a normal merge would
+  // leave the stale remote copy sitting under the old key as a duplicate (same class of
+  // bug as deleting an entry). Skip the merge so the rename fully replaces it.
+  calPushToCloud({ skipMerge: deChanged });
 }
 
 function calDeleteFoodBankEntry(key) {
