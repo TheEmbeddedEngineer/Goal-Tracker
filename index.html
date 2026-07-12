@@ -248,6 +248,28 @@
 
   .lw-last.has-val { cursor:pointer; text-decoration:underline dotted; }
 
+  /* App bar (phones only): slim sticky header with the active tab's key numbers,
+     so the most important info stays visible no matter how deep you've scrolled.
+     Desktop keeps the plain title + always-visible Setup card. */
+  #appBar { display:none; }
+  @media (max-width: 640px) {
+    #appBar { display:block; position:fixed; top:0; left:0; right:0; z-index:55; background:var(--card); border-bottom:1px solid var(--border-strong); padding: calc(8px + env(safe-area-inset-top)) 14px 7px; }
+    .ab-top { display:flex; justify-content:space-between; align-items:center; }
+    .ab-title { font-weight:700; font-size:15px; }
+    .ab-right { display:flex; align-items:center; gap:10px; }
+    #appBarGear { background:none; border:none; font-size:16px; cursor:pointer; padding:2px 4px; line-height:1; }
+    .ab-glance { font-size:12px; color:var(--text-secondary); margin-top:2px; white-space:nowrap; overflow-x:auto; scrollbar-width:none; min-height:15px; }
+    .ab-glance::-webkit-scrollbar { display:none; }
+    .ab-glance b { color:var(--text); }
+    body { padding-top: calc(58px + env(safe-area-inset-top)); }
+    .wrap > h1, .wrap > .sub { display:none; }
+    /* Setup lives behind the app-bar gear on phones; body.show-setup reveals it
+       (and is set automatically on first run while no sync code exists). */
+    #setupCard { display:none; }
+    body.show-setup #setupCard { display:block; }
+    .card, .person-tabs, .day-tabs, #section-weekly, #section-calories, #section-training { scroll-margin-top: calc(66px + env(safe-area-inset-top)); }
+  }
+
   /* Bottom tab bar (phones only) — the pages are long, so navigation shouldn't
      require scrolling back to the top. Desktop keeps the top tabs. */
   .bottom-nav { display:none; }
@@ -268,11 +290,21 @@
 </style>
 </head>
 <body>
+<header id="appBar">
+  <div class="ab-top">
+    <span class="ab-title">Couple tracker</span>
+    <span class="ab-right">
+      <span class="sync-dot" id="appBarDot"></span>
+      <button type="button" id="appBarGear" title="Setup">&#9881;&#65039;</button>
+    </span>
+  </div>
+  <div class="ab-glance" id="glanceBar"></div>
+</header>
 <div class="wrap">
   <h1>Couple tracker</h1>
   <p class="sub">Weekly accountability, calories, and training — one shared setup, three trackers.</p>
 
-  <div class="card">
+  <div class="card" id="setupCard">
     <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;"><span style="display:flex; align-items:center; gap:8px;">Setup <span class="sync-dot" id="syncDot"></span></span> <span id="setupArrow">&#9656;</span></h2>
     <div id="setupBody">
       <div class="settings-row">
@@ -534,17 +566,18 @@ function ensureAuth() {
 function setSyncStatus(text) {
   const el = document.getElementById('syncStatus');
   if (el) el.textContent = text;
-  // Mirror the state onto the always-visible dot in the Setup header, since the
-  // status text itself is hidden whenever the card is collapsed.
-  const dot = document.getElementById('syncDot');
-  if (dot) {
-    let state = '';
-    if (/^Synced/.test(text)) state = 'on';
-    else if (/error/i.test(text)) state = 'error';
-    else if (/^Connecting/.test(text)) state = 'connecting';
+  // Mirror the state onto the always-visible dots (Setup header + phone app bar),
+  // since the status text itself is hidden whenever the card is collapsed.
+  let state = '';
+  if (/^Synced/.test(text)) state = 'on';
+  else if (/error/i.test(text)) state = 'error';
+  else if (/^Connecting/.test(text)) state = 'connecting';
+  ['syncDot', 'appBarDot'].forEach(id => {
+    const dot = document.getElementById(id);
+    if (!dot) return;
     dot.className = 'sync-dot' + (state ? ' ' + state : '');
     dot.title = text;
-  }
+  });
 }
 
 // Shared guard for the two "Clear all …" links: wiping syncs to the other person's
@@ -624,16 +657,30 @@ document.getElementById('setupToggle').addEventListener('click', () => {
   setSetupCollapsed(!document.getElementById('setupBody').classList.contains('collapsed'));
 });
 
+// On phones the Setup card is hidden behind the app-bar gear (it's a rare-touch card);
+// the gear reveals it expanded at the top of the page.
+document.getElementById('appBarGear').addEventListener('click', () => {
+  const show = !document.body.classList.contains('show-setup');
+  document.body.classList.toggle('show-setup', show);
+  if (show) {
+    setSetupCollapsed(false);
+    window.scrollTo({ top: 0 });
+  }
+});
+
 /* ===================== SHARED: tab navigation ===================== */
 
 const SECTION_IDS = { weekly: 'section-weekly', calories: 'section-calories', training: 'section-training' };
+let currentTab = 'weekly';
 function showTab(tab) {
   if (!SECTION_IDS[tab]) tab = 'weekly';
+  currentTab = tab;
   Object.entries(SECTION_IDS).forEach(([key, id]) => {
     document.getElementById(id).style.display = key === tab ? '' : 'none';
   });
   document.querySelectorAll('.main-tabs button, .bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   try { localStorage.setItem('activeTab', tab); } catch (err) {}
+  renderGlanceBar();
 }
 document.querySelectorAll('.main-tabs button').forEach(b => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
@@ -643,6 +690,45 @@ document.querySelectorAll('.main-tabs button').forEach(b => {
 document.querySelectorAll('.bottom-nav button').forEach(b => {
   b.addEventListener('click', () => { showTab(b.dataset.tab); window.scrollTo({ top: 0 }); });
 });
+
+// Phone app bar's one-line summary of the active tab for its active person — the key
+// numbers stay visible while scrolled anywhere in the page. Re-rendered from
+// renderTodayCard (which every tab's renderAll already calls) and on tab switches.
+function renderGlanceBar() {
+  const el = document.getElementById('glanceBar');
+  if (!el) return;
+  let html = '';
+  try {
+    if (currentTab === 'weekly') {
+      const pk = wkActivePerson;
+      const monday = getMonday(new Date());
+      const counts = wkCatCountsForWeek(pk, monday);
+      const th = wkThresholdsForWeek(monday);
+      const streak = wkCurrentStreak(pk);
+      html = CATS.map(([k, label]) => `${label.split(' ')[0]} <b>${counts[k]}/${th[k]}</b>`).join(' &middot; ')
+        + (streak > 0 ? ` &middot; &#128293;${streak}` : '');
+    } else if (currentTab === 'calories') {
+      const pk = calActivePerson;
+      const ds = todayStr();
+      const goal = calGoalsForDay(ds)[pk];
+      const totals = calDayTotals(pk, ds);
+      const kcalLeft = (goal.calories || 0) - totals.calories;
+      const protLeft = (goal.protein || 0) - totals.protein;
+      html = (kcalLeft >= 0
+          ? `<b>${kcalLeft.toLocaleString()}</b> kcal left`
+          : `<b>${(-kcalLeft).toLocaleString()}</b> kcal over`)
+        + (protLeft > 0 ? ` &middot; <b>${calRound2(protLeft)}g</b> protein to go` : ' &middot; protein &#10003;');
+      if (pk === 'p1') html += ` &middot; deficit <b>${Math.round(calCumulativeDeficit('p1')).toLocaleString()}</b>`;
+    } else if (currentTab === 'training') {
+      const pk = trActivePerson;
+      const n = trWeekLogCount(pk, getMonday(new Date()));
+      const streak = trCurrentStreak(pk);
+      html = `<b>${n}/${TR_STREAK_MIN_LOGS}</b> sessions this week`
+        + (streak > 0 ? ` &middot; &#128293;${streak}-wk streak` : '');
+    }
+  } catch (err) { html = ''; }
+  el.innerHTML = html;
+}
 
 // At-a-glance "did I/we do everything today" strip shown above the tabs regardless of
 // which one is active — without it you'd have to visit all 3 tabs to know your own full
@@ -673,6 +759,7 @@ function renderTodayCard() {
   el.querySelectorAll('.today-pill').forEach(btn => {
     btn.addEventListener('click', () => jumpToToday(btn.dataset.tab, btn.dataset.p));
   });
+  renderGlanceBar();
 }
 
 // Jumps from the Today card straight to the relevant tab, with that person selected and
@@ -828,6 +915,7 @@ function wkRenderPersonTabs() {
       saveActivePerson('wkActivePerson', wkActivePerson);
       wkRenderPersonTabs();
       wkLoadCheckboxesForDate();
+      renderGlanceBar();
     });
   });
 }
@@ -1863,6 +1951,8 @@ function calRenderPersonTabs() {
       calRenderWeightCard();
       calRenderBurnCard();
       calRenderTrendChart();
+      calRenderDeficitCard();
+      renderGlanceBar();
     });
   });
 }
@@ -3978,7 +4068,12 @@ let initialSetupCollapsed = true;
 try { initialSetupCollapsed = localStorage.getItem('setupCollapsed') !== '0'; } catch (err) {}
 // First run (or sync code removed): keep Setup open so the "not syncing" hint is
 // actually visible — collapsed, a new user never learns they're running local-only.
-if (!coupleCode) initialSetupCollapsed = false;
+// On phones the whole card is additionally hidden behind the app-bar gear, so also
+// force it visible until a sync code exists.
+if (!coupleCode) {
+  initialSetupCollapsed = false;
+  document.body.classList.add('show-setup');
+}
 setSetupCollapsed(initialSetupCollapsed);
 
 let initialCalGoalsCollapsed = true;
