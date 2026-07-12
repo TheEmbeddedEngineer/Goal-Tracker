@@ -196,8 +196,10 @@
   .ex-row:last-child { border-bottom:none; }
   .ex-name { flex:1; min-width:0; font-size:14px; }
   .ex-reps { font-size:12px; color:var(--text-muted); flex-shrink:0; white-space:nowrap; }
-  .ex-link { flex-shrink:0; }
-  .ex-link a { display:inline-block; padding:5px 10px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); text-decoration:none; font-size:12px; white-space:nowrap; }
+  /* Exercise names double as the video link — underlined dotted with a small play
+     marker instead of a separate "Watch" button. */
+  .ex-video-link { color:inherit; text-decoration:underline dotted; text-decoration-color:var(--text-muted); text-underline-offset:3px; }
+  .ex-play { font-size:9px; color:var(--accent); margin-left:5px; vertical-align:1px; }
   .section-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin:18px 0 6px; }
   .section-title:first-child { margin-top:0; }
   details.tr-overview-details { margin-top:20px; }
@@ -213,8 +215,10 @@
   .log-date-row { margin-bottom:10px; }
   .log-date-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
   .log-date-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
-  .log-weight-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
-  .log-weight-row .lw-name { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
+  .log-weight-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .log-weight-row:last-child { border-bottom:none; }
+  .log-weight-row .lw-name { flex:1; min-width:0; font-size:14px; color:var(--text); }
+  .log-weight-row .lw-reps { display:block; font-size:11px; color:var(--text-muted); margin-top:2px; }
   .log-weight-row .lw-last { font-size:11px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
   .log-weight-row input { width:90px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   .past-log-row { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; background:var(--bg); }
@@ -2979,7 +2983,6 @@ const PLAN_P1 = {
       ['Leaning dumbbell lateral raise', '3x15-20/side', 'https://www.youtube.com/watch?v=lq7eLC30b9w'],
       ['Dumbbell overhead triceps extension', '3x12-15', 'https://www.muscleandstrength.com/exercises/two-arm-dumbbell-extension.html']
     ],
-    footnote: 'New this cycle: the fly and the leaning lateral raise. Both are there specifically to grow chest and side delts rather than just maintain them — take these two closer to failure (0-2 reps in reserve) since they\'re isolation work, not compound lifts.'
   },
   day2: {
     title: 'Upper: pull strength + rear delt/bicep growth',
@@ -3004,7 +3007,6 @@ const PLAN_P1 = {
       ['Incline dumbbell curl', '3x10-12', 'https://www.muscleandstrength.com/exercises/incline-dumbbell-curl.html'],
       ['Dumbbell concentration curl', '3x12', 'https://www.muscleandstrength.com/exercises/concentration-cur.html']
     ],
-    footnote: 'If you have a pull-up bar at home, keep pull-ups as your main pull movement instead of rows. Band face pull needs a resistance band — if you don\'t have one, do an extra set of the rear delt fly instead. New this cycle: the reverse pec-deck/heavier rear-delt fly, band face pull, and the incline curl — all dosed to grow, not just maintain.'
   },
   day3: {
     title: 'Lower body + rotational core',
@@ -3027,7 +3029,6 @@ const PLAN_P1 = {
       ['Superman', '3x15', 'https://www.muscleandstrength.com/exercises/superman'],
       ['Weighted crunch', '3x12-15', 'https://www.muscleandstrength.com/exercises/weighted-crunch.html']
     ],
-    footnote: 'New this cycle: the crunch at the end. It\'s loaded and taken close to failure — unlike the rotational/anti-rotation work elsewhere in the plan, this one is specifically there to grow the abs, not just stabilize the spine.'
   },
   day4: {
     title: 'Upper: hypertrophy + arm/delt finisher',
@@ -3048,7 +3049,6 @@ const PLAN_P1 = {
       ['Hammer curl + lying dumbbell triceps extension (superset)', '4x12 each', 'https://www.muscleandstrength.com/exercises/lying-dumbbell-extension.html'],
       ['Interval finisher: burpees, jump rope, or stair sprints', '10-12 min', 'https://www.youtube.com/watch?v=qLBImHhCXSw']
     ],
-    footnote: 'Both supersets went from 3 to 4 rounds this cycle — this is your second weekly touch for side/rear delts and arms, so it carries real growth-specialization weight, not just a finisher.'
   },
   day5: {
     title: 'Full body metabolic + conditioning + ab growth',
@@ -3069,7 +3069,6 @@ const PLAN_P1 = {
       ['Hanging or lying leg raise', '3x10-15', 'https://www.muscleandstrength.com/exercises/hanging-leg-raise.html'],
       ['Single dumbbell diagonal woodchop', '3x12/side', 'https://www.muscleandstrength.com/exercises/wood-chop.html']
     ],
-    footnote: 'New this cycle: the leg raise, and the woodchop replacing the old bodyweight circuit finisher (matches the gym side dropping its cardio circuit for the rotational cable chop). Paired with Day 3\'s crunch, the leg raise gives abs 2x/week direct loaded volume instead of only rotational/stability work.'
   },
   backcare: {
     intro: 'Tennis loads the lower back through rotation, serving (extension), and lateral movement — if it\'s tight or achy afterward, that\'s usually the surrounding muscles (core, glutes, hips) not doing their share. This builds that support without adding more spinal load. This is general supportive work, not treatment — if pain is sharp, radiates down a leg, comes with numbness/tingling, or persists or worsens over a few days, see a doctor or physiotherapist.',
@@ -3170,7 +3169,6 @@ const PLAN_P2 = {
       ['Dips (bench or parallel bar)', '3x10-12', 'https://www.muscleandstrength.com/exercises/tricep-dip.html'],
       ['Side plank', '2x20-30s/side', 'https://www.muscleandstrength.com/exercises/side-hover.html']
     ],
-    footnote: 'Push volume here is intentionally lower than the pull volume across Days 1-2 — that\'s the 2:1 ratio doing its job for posture.'
   },
   day4: {
     title: 'Lower body / hip strength',
@@ -3186,7 +3184,6 @@ const PLAN_P2 = {
       ['Back extension', '3x15', 'https://www.muscleandstrength.com/exercises/hyperextension.html'],
       ['Cable crunch', '3x12-15', 'https://www.muscleandstrength.com/exercises/cable-crunch.html']
     ],
-    footnote: 'Hip abduction and adduction target glute medius and the inner thigh, supporting pelvis and hip stability and complementing the overall posture focus — new compared to Day 1\'s leg work rather than a repeat. Back extension and cable crunch add direct core work in place of the plank.'
   }
 };
 
@@ -3386,11 +3383,14 @@ function trUpdateActiveTabStyles() {
   document.querySelectorAll('#trDayTabs button').forEach(b => b.classList.toggle('active', b.dataset.d === trActiveDay));
 }
 
+function trExName(name, url) {
+  return url
+    ? `<a class="ex-video-link" href="${url}" target="_blank" rel="noopener">${name}<span class="ex-play">&#9654;</span></a>`
+    : name;
+}
+
 function trExRow([name, reps, url]) {
-  const link = url
-    ? `<span class="ex-link"><a href="${url}" target="_blank" rel="noopener">&#9654; Watch</a></span>`
-    : '';
-  return `<div class="ex-row"><span class="ex-name">${name}</span><span class="ex-reps">${reps}</span>${link}</div>`;
+  return `<div class="ex-row"><span class="ex-name">${trExName(name, url)}</span><span class="ex-reps">${reps}</span></div>`;
 }
 
 function trRenderOverview(plan) {
@@ -3649,16 +3649,12 @@ function trRenderDay(day, dayKey) {
         <button id="variantGym" class="${trActiveVariant === 'gym' ? 'active' : ''}">Gym</button>
         <button id="variantHome" class="${trActiveVariant === 'home' ? 'active' : ''}">Home (dumbbell)</button>
       </div>` : ''}
-    ${list.map(trExRow).join('')}
-    ${day.footnote ? `<p class="note" style="margin-top:12px;">${day.footnote}</p>` : ''}
-
-    <div class="section-title">Log this workout</div>
     <div class="log-date-row">
       <label>Date</label>
       <input type="date" id="logDate">
     </div>
     <div id="logWeights">
-      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><span class="lw-last" id="lwLast_${i}" data-target="logW_${i}" title="Tap to use this weight"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
+      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${trExName(ex[0], ex[2])}<span class="lw-reps">${ex[1]}</span></span><span class="lw-last" id="lwLast_${i}" data-target="logW_${i}" title="Tap to use this weight"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
     </div>
     <p id="logError" class="field-error" style="display:none;">Enter at least one weight.</p>
     <button class="primary" id="saveLogBtn">Save log</button>
