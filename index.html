@@ -965,10 +965,11 @@ function calEntriesCollectionQuery(code) {
   // id starts with "{code}_" without needing a separate index of which months exist.
   return query(collection(db, 'calorieEntries'), where(documentId(), '>=', code + '_'), where(documentId(), '<', code + '_'));
 }
-function calEntriesSliceForMonth(monthKey) {
+function calEntriesSliceForMonth(monthKey, sourceEntries) {
+  const source = sourceEntries || calEntries;
   const slice = { p1: {}, p2: {} };
   ['p1', 'p2'].forEach(pk => {
-    Object.entries(calEntries[pk] || {}).forEach(([ds, day]) => {
+    Object.entries(source[pk] || {}).forEach(([ds, day]) => {
       if (calMonthKey(ds) === monthKey) slice[pk][ds] = day;
     });
   });
@@ -1362,6 +1363,11 @@ function calSubscribeToEntriesCloud(code) {
   if (!code) return;
   ensureAuth().then(() => {
     calEntriesUnsub = onSnapshot(calEntriesCollectionQuery(code), (snap) => {
+      // A legacy-entries migration owns calEntries while it runs (see
+      // calMigrateLegacyEntriesIfNeeded) — applying a snapshot here mid-migration would
+      // very likely be an incomplete/stale one (the migration's own writes are still in
+      // flight), so skip it and let the migration's own final assignment + render win.
+      if (calMigratingLegacyEntries) return;
       calApplyingRemote = true;
       const combined = { p1: {}, p2: {} };
       snap.forEach(d => {
@@ -1408,28 +1414,44 @@ function calItemKey(it) {
 // Pushes just one month's slice of entries to its own document, merging with whatever's
 // already there first (same array-clobber protection as calMergeFoodBank, just scoped to
 // one month instead of the whole history — see the comment by calMonthKey above).
+//
+// opts.sourceEntries lets a caller (the legacy migration below) supply an explicit,
+// already-merged entries tree to push from instead of reading the live calEntries global.
+// This matters because calEntries is also asynchronously overwritten by the real-time
+// entries-collection listener (calSubscribeToEntriesCloud) — without this, a snapshot
+// landing between this function's `await`s could clobber calEntries out from under an
+// in-flight push and cause it to write empty/stale data. (This is exactly how the July
+// 2026 migration incident lost data: the migration merged legacy entries into calEntries,
+// then awaited a push — and the entries listener's first, still-empty snapshot overwrote
+// calEntries before the push read it, so an empty slice got written and the legacy copy
+// was then deleted. See CLAUDE.md / commit history for the postmortem.)
 async function calPushEntriesForMonth(monthKey, opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
   const ref = calEntryDocRef(coupleCode, monthKey);
+  const usingExplicitSource = !!opts.sourceEntries;
   try {
     await ensureAuth();
+    let slice = calEntriesSliceForMonth(monthKey, opts.sourceEntries);
     if (!opts.skipMerge) {
       try {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const remoteSlice = snap.data().entries || {};
-          const localSlice = calEntriesSliceForMonth(monthKey);
-          const mergedSlice = calMergeEntriesInto(localSlice, remoteSlice);
-          ['p1', 'p2'].forEach(pk => Object.assign(calEntries[pk] || (calEntries[pk] = {}), mergedSlice[pk]));
+          slice = calMergeEntriesInto(slice, remoteSlice);
+          if (!usingExplicitSource) {
+            ['p1', 'p2'].forEach(pk => Object.assign(calEntries[pk] || (calEntries[pk] = {}), slice[pk]));
+          }
         }
       } catch (err) { console.error('Could not merge remote entries before push:', err); }
     }
-    await setDoc(ref, { entries: calEntriesSliceForMonth(monthKey) }, { merge: true });
-    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
-    calRenderLogCard();
-    calRenderMonth();
-    calRenderTrendChart();
-    calRenderDeficitCard();
+    await setDoc(ref, { entries: slice }, { merge: true });
+    if (!usingExplicitSource) {
+      try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+      calRenderLogCard();
+      calRenderMonth();
+      calRenderTrendChart();
+      calRenderDeficitCard();
+    }
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (calories): could not save');
@@ -1490,13 +1512,22 @@ async function calMigrateLegacyEntriesIfNeeded(legacyEntries) {
   try {
     const monthKeys = new Set();
     ['p1', 'p2'].forEach(pk => Object.keys(legacyEntries[pk] || {}).forEach(ds => monthKeys.add(calMonthKey(ds))));
-    calEntries = calMergeEntriesInto(calEntries, legacyEntries);
+    // Captured once into a local const — deliberately NOT written into the global
+    // calEntries here. calSubscribeToEntriesCloud's listener also skips applying its
+    // snapshots while calMigratingLegacyEntries is true, but pushing from an isolated
+    // local copy (instead of the shared global) is the actual fix; the listener guard is
+    // just defense in depth. See the comment on calPushEntriesForMonth for why this
+    // matters.
+    const migratedEntries = calMergeEntriesInto(calEntries, legacyEntries);
+    for (const monthKey of monthKeys) {
+      await calPushEntriesForMonth(monthKey, { sourceEntries: migratedEntries });
+    }
+    // Migration is done and Firestore now has the real data — safe to update the shared
+    // global and re-render.
+    calEntries = calMergeEntriesInto(calEntries, migratedEntries);
     try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
     calRefreshTopFoodsCache();
     calRenderAll();
-    for (const monthKey of monthKeys) {
-      await calPushEntriesForMonth(monthKey);
-    }
     await calPushToCloud({ migrateClearEntries: true });
   } catch (err) {
     console.error('Legacy entries migration failed:', err);
