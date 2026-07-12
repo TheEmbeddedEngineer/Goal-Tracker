@@ -419,7 +419,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, collection, query, where, documentId, deleteField } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBlts7uMhKzrBpGl-yK6hyn6TzP-Yb3zYE",
@@ -456,8 +456,8 @@ function setSyncStatus(text) {
 }
 
 function markSynced() {
-  syncReadyCount = Math.min(syncReadyCount + 1, 3);
-  if (syncReadyCount >= 3) setSyncStatus('Synced as "' + coupleCode + '"');
+  syncReadyCount = Math.min(syncReadyCount + 1, 4);
+  if (syncReadyCount >= 4) setSyncStatus('Synced as "' + coupleCode + '"');
 }
 
 function applySharedSettingsToInputs() {
@@ -483,6 +483,7 @@ function onSyncCodeChange() {
   setSyncStatus(code ? 'Connecting…' : 'Not syncing — enter a sync code above to share data across devices.');
   wkSubscribeToCloud(code);
   calSubscribeToCloud(code);
+  calSubscribeToEntriesCloud(code);
   trSubscribeToCloud(code);
 }
 
@@ -943,7 +944,56 @@ let calActivePerson = loadActivePerson('calActivePerson');
 let calViewedMonth = null;
 let calSelectedMonthDate = null;
 let calUnsub = null;
+let calEntriesUnsub = null;
 let calApplyingRemote = false;
+let calMigratingLegacyEntries = false;
+
+// Food log entries are the fast-growing, unbounded part of this data — everything ever
+// logged, forever, at ~450 bytes/item in Firestore's format. Packed into the single
+// `calories/{code}` doc alongside foodBank/settings/etc, they'd hit Firestore's 1 MiB
+// per-document limit within months at normal logging pace (and once that doc is full,
+// every write to it fails outright — including unrelated fields like weight/goals). So
+// entries live in their own collection, one document per calendar month
+// (`calorieEntries/{code}_{YYYY-MM}`), which keeps every single document small and
+// bounded forever. `calories/{code}` itself keeps only foodBank/settings/dailyGoals/
+// weightLog/burnLog, which all stay small on their own.
+function calMonthKey(dateStr) { return dateStr.slice(0, 7); }
+function calEntryDocRef(code, monthKey) { return doc(db, 'calorieEntries', code + '_' + monthKey); }
+function calEntriesCollectionQuery(code) {
+  // Firestore has no "list docs by collection" for a client SDK without a field to filter
+  // on, but document-id range queries work — this matches every calorieEntries doc whose
+  // id starts with "{code}_" without needing a separate index of which months exist.
+  return query(collection(db, 'calorieEntries'), where(documentId(), '>=', code + '_'), where(documentId(), '<', code + '_'));
+}
+function calEntriesSliceForMonth(monthKey) {
+  const slice = { p1: {}, p2: {} };
+  ['p1', 'p2'].forEach(pk => {
+    Object.entries(calEntries[pk] || {}).forEach(([ds, day]) => {
+      if (calMonthKey(ds) === monthKey) slice[pk][ds] = day;
+    });
+  });
+  return slice;
+}
+// Same content-hash merge as calMergeFoodBank/calItemKey, generalized to operate on a
+// plain entries object (a whole calEntries tree, or just one month's slice of it) instead
+// of always mutating the global calEntries directly.
+function calMergeEntriesInto(localEntries, remoteEntries) {
+  const merged = { p1: {}, p2: {} };
+  ['p1', 'p2'].forEach(pk => {
+    const localDays = (localEntries || {})[pk] || {};
+    const remoteDays = (remoteEntries || {})[pk] || {};
+    const allDates = new Set([...Object.keys(localDays), ...Object.keys(remoteDays)]);
+    allDates.forEach(ds => {
+      const localItems = (localDays[ds] || {}).items || [];
+      const remoteItems = (remoteDays[ds] || {}).items || [];
+      const byKey = new Map();
+      remoteItems.forEach(it => byKey.set(calItemKey(it), it));
+      localItems.forEach(it => byKey.set(calItemKey(it), it));
+      merged[pk][ds] = { items: Array.from(byKey.values()) };
+    });
+  });
+  return merged;
+}
 
 function calGoalsForDay(dateStr) {
   return calDailyGoals[dateStr] || calGoals;
@@ -1213,21 +1263,22 @@ const CAL_NAME_FIXES = {
 };
 
 function calApplyLegacyFixes() {
-  let changed = false;
+  let bankChanged = false;
+  const entriesChangedDates = [];
   calFoodBank.forEach(entry => {
     if (entry.category) return;
     const fix = CAL_LEGACY_FIXES[entry.de] || CAL_LEGACY_FIXES[entry.en];
     entry.category = fix ? fix.category : 'Other';
     if (fix && fix.en) entry.en = fix.en;
     if (fix && fix.de) entry.de = fix.de;
-    changed = true;
+    bankChanged = true;
   });
 
   calFoodBank.forEach(entry => {
     const fixedEn = CAL_NAME_FIXES[entry.de];
     if (fixedEn && entry.en !== fixedEn) {
       entry.en = fixedEn;
-      changed = true;
+      bankChanged = true;
     }
   });
 
@@ -1236,28 +1287,28 @@ function calApplyLegacyFixes() {
   // group correctly instead of dumping everything into "Other".
   ['p1', 'p2'].forEach(pk => {
     const personEntries = calEntries[pk] || {};
-    Object.values(personEntries).forEach(day => {
+    Object.entries(personEntries).forEach(([ds, day]) => {
       (day.items || []).forEach(item => {
         if (item.category) return;
         const bankEntry = calFindInBank(item.name);
         const fix = CAL_LEGACY_FIXES[item.name];
         item.category = (bankEntry && bankEntry.category) || (fix && fix.category) || 'Other';
-        changed = true;
+        entriesChangedDates.push(ds);
       });
     });
   });
 
-  if (changed) {
-    try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
-    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+  if (bankChanged || entriesChangedDates.length) {
+    if (bankChanged) { try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {} }
+    if (entriesChangedDates.length) { try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {} }
     calRenderAll();
-    calPushToCloud();
+    if (bankChanged) calPushToCloud();
+    if (entriesChangedDates.length) calPushEntriesForDates(entriesChangedDates);
   }
 }
 
 function calApplyRemoteData(data) {
   calApplyingRemote = true;
-  calEntries = data.entries || {};
   if (data.settings) {
     sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
     sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
@@ -1269,7 +1320,6 @@ function calApplyRemoteData(data) {
   calBurnLog = data.burnLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
-  try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
   try { localStorage.setItem('calorie_dailyGoals', JSON.stringify(calDailyGoals)); } catch (err) {}
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
@@ -1282,6 +1332,7 @@ function calApplyRemoteData(data) {
   calRenderBurnCard();
   calApplyingRemote = false;
   calApplyLegacyFixes();
+  if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);
 }
 
 function calSubscribeToCloud(code) {
@@ -1299,6 +1350,34 @@ function calSubscribeToCloud(code) {
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (calories): ' + err.message);
+    });
+  });
+}
+
+// Separate subscription for the per-month entry documents (see calMonthKey above) — these
+// live in their own collection, so a doc-id range query aggregates every month for this
+// sync code into one combined calEntries tree, same shape the rest of the app expects.
+function calSubscribeToEntriesCloud(code) {
+  if (calEntriesUnsub) { calEntriesUnsub(); calEntriesUnsub = null; }
+  if (!code) return;
+  ensureAuth().then(() => {
+    calEntriesUnsub = onSnapshot(calEntriesCollectionQuery(code), (snap) => {
+      calApplyingRemote = true;
+      const combined = { p1: {}, p2: {} };
+      snap.forEach(d => {
+        const data = d.data().entries || {};
+        ['p1', 'p2'].forEach(pk => Object.assign(combined[pk], data[pk] || {}));
+      });
+      calEntries = combined;
+      try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+      calRefreshTopFoodsCache();
+      calRenderAll();
+      calApplyingRemote = false;
+      calApplyLegacyFixes();
+      markSynced();
+    }, (err) => {
+      console.error(err);
+      setSyncStatus('Sync error (calorie entries): ' + err.message);
     });
   });
 }
@@ -1326,23 +1405,40 @@ function calItemKey(it) {
   return [it.name, it.unit, it.grams, it.calories, it.protein, it.carbs, it.fat, it.category].join('|');
 }
 
-function calMergeEntries(remoteEntries) {
-  const merged = {};
-  ['p1', 'p2'].forEach(pk => {
-    merged[pk] = {};
-    const localDays = calEntries[pk] || {};
-    const remoteDays = (remoteEntries || {})[pk] || {};
-    const allDates = new Set([...Object.keys(localDays), ...Object.keys(remoteDays)]);
-    allDates.forEach(ds => {
-      const localItems = (localDays[ds] || {}).items || [];
-      const remoteItems = (remoteDays[ds] || {}).items || [];
-      const byKey = new Map();
-      remoteItems.forEach(it => byKey.set(calItemKey(it), it));
-      localItems.forEach(it => byKey.set(calItemKey(it), it));
-      merged[pk][ds] = { items: Array.from(byKey.values()) };
-    });
-  });
-  calEntries = merged;
+// Pushes just one month's slice of entries to its own document, merging with whatever's
+// already there first (same array-clobber protection as calMergeFoodBank, just scoped to
+// one month instead of the whole history — see the comment by calMonthKey above).
+async function calPushEntriesForMonth(monthKey, opts = {}) {
+  if (!coupleCode || calApplyingRemote) return;
+  const ref = calEntryDocRef(coupleCode, monthKey);
+  try {
+    await ensureAuth();
+    if (!opts.skipMerge) {
+      try {
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const remoteSlice = snap.data().entries || {};
+          const localSlice = calEntriesSliceForMonth(monthKey);
+          const mergedSlice = calMergeEntriesInto(localSlice, remoteSlice);
+          ['p1', 'p2'].forEach(pk => Object.assign(calEntries[pk] || (calEntries[pk] = {}), mergedSlice[pk]));
+        }
+      } catch (err) { console.error('Could not merge remote entries before push:', err); }
+    }
+    await setDoc(ref, { entries: calEntriesSliceForMonth(monthKey) }, { merge: true });
+    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+    calRenderLogCard();
+    calRenderMonth();
+    calRenderTrendChart();
+    calRenderDeficitCard();
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (calories): could not save');
+  }
+}
+
+async function calPushEntriesForDates(dates) {
+  const months = new Set(dates.map(calMonthKey));
+  await Promise.all([...months].map(m => calPushEntriesForMonth(m)));
 }
 
 async function calPushToCloud(opts = {}) {
@@ -1351,23 +1447,23 @@ async function calPushToCloud(opts = {}) {
     await ensureAuth();
     try {
       const snap = await getDoc(doc(db, 'calories', coupleCode));
-      if (snap.exists()) {
-        const remote = snap.data();
-        calMergeFoodBank(remote.foodBank);
-        if (!opts.skipMerge) calMergeEntries(remote.entries);
-      }
+      if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
     } catch (err) { console.error('Could not merge remote data before push:', err); }
     const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'calories', coupleCode), {
-      entries: calEntries,
+    const payload = {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
       dailyGoals: calDailyGoals,
       foodBank: calFoodBank,
       weightLog: calWeightLog,
       burnLog: calBurnLog
-    }, writeOpts);
+    };
+    // One-time cleanup: the old schema kept every food log entry ever logged inside this
+    // same document, which is what drove it toward Firestore's 1 MiB limit in the first
+    // place (see calMonthKey above) — once legacy entries have been migrated out to
+    // calorieEntries/*, remove the now-redundant copy still sitting in this doc.
+    if (opts.migrateClearEntries) payload.entries = deleteField();
+    await setDoc(doc(db, 'calories', coupleCode), payload, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
-    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
     try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
     try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
     calRenderLogCard();
@@ -1377,6 +1473,35 @@ async function calPushToCloud(opts = {}) {
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (calories): could not save');
+  }
+}
+
+// One-time, self-healing migration off the old schema (see calMonthKey above): if the
+// main calories/{code} doc still has a legacy top-level "entries" field, fold it into
+// calEntries, push it out to the new per-month documents, then delete it from the old
+// location. Runs automatically the next time the app loads with real data present — no
+// manual/raw write needed. Safe to run repeatedly: once the legacy field is actually gone
+// from the doc, calApplyRemoteData stops calling this at all.
+async function calMigrateLegacyEntriesIfNeeded(legacyEntries) {
+  if (calMigratingLegacyEntries || !coupleCode) return;
+  const hasData = legacyEntries && ['p1', 'p2'].some(pk => Object.keys(legacyEntries[pk] || {}).length);
+  if (!hasData) return;
+  calMigratingLegacyEntries = true;
+  try {
+    const monthKeys = new Set();
+    ['p1', 'p2'].forEach(pk => Object.keys(legacyEntries[pk] || {}).forEach(ds => monthKeys.add(calMonthKey(ds))));
+    calEntries = calMergeEntriesInto(calEntries, legacyEntries);
+    try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
+    calRefreshTopFoodsCache();
+    calRenderAll();
+    for (const monthKey of monthKeys) {
+      await calPushEntriesForMonth(monthKey);
+    }
+    await calPushToCloud({ migrateClearEntries: true });
+  } catch (err) {
+    console.error('Legacy entries migration failed:', err);
+  } finally {
+    calMigratingLegacyEntries = false;
   }
 }
 
@@ -1687,7 +1812,8 @@ async function calAddItem() {
   calRenderDeficitCard();
   // Editing replaces a specific item in place, so trust the local result rather than
   // merging (a stale remote copy could otherwise resurrect the pre-edit version).
-  calPushToCloud({ skipMerge: wasEditing });
+  calPushToCloud();
+  calPushEntriesForMonth(calMonthKey(ds), { skipMerge: wasEditing });
 }
 
 function calDeleteItem(index) {
@@ -1700,7 +1826,7 @@ function calDeleteItem(index) {
   calRenderMonth();
   calRenderTrendChart();
   calRenderDeficitCard();
-  calPushToCloud({ skipMerge: true });
+  calPushEntriesForMonth(calMonthKey(ds), { skipMerge: true });
 }
 
 function calPopulateFormFromItem(item) {
@@ -2142,7 +2268,15 @@ document.getElementById('calResetBtn').addEventListener('click', async () => {
   calEntries = {};
   try { localStorage.removeItem('calorie_entries'); } catch (err) {}
   calRenderAll();
-  calPushToCloud({ replace: true, skipMerge: true });
+  if (!coupleCode) return;
+  try {
+    await ensureAuth();
+    const snap = await getDocs(calEntriesCollectionQuery(coupleCode));
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (calories): could not clear');
+  }
 });
 
 /* ===================== TRAINING PLAN ===================== */
@@ -3098,6 +3232,7 @@ trLoadData();
 setSyncStatus(coupleCode ? 'Connecting…' : 'Not syncing — enter a sync code above to share data across devices.');
 wkSubscribeToCloud(coupleCode);
 calSubscribeToCloud(coupleCode);
+calSubscribeToEntriesCloud(coupleCode);
 trSubscribeToCloud(coupleCode);
 
 let initialSetupCollapsed = true;
