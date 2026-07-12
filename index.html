@@ -200,6 +200,10 @@
   .ex-link a { display:inline-block; padding:5px 10px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); text-decoration:none; font-size:12px; white-space:nowrap; }
   .section-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin:18px 0 6px; }
   .section-title:first-child { margin-top:0; }
+  details.tr-overview-details { margin-top:20px; }
+  details.tr-overview-details summary { font-size:13px; font-weight:600; color:var(--text-secondary); cursor:pointer; }
+  details.tr-overview-details summary::-webkit-details-marker { color:var(--text-secondary); }
+  details.tr-overview-details[open] summary { margin-bottom:4px; }
   .note { font-size:13px; color:var(--text-secondary); line-height:1.5; margin:0 0 10px; }
   .freq-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
   .freq-table th, .freq-table td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
@@ -2180,10 +2184,12 @@ function calRenderMonth() {
 
 let calTrendMetric = 'calories';
 
+// Starts from i=days (oldest) down to i=1 (yesterday) — today is deliberately excluded
+// since it's still in progress and would read as a misleading dip/spike on the chart.
 function calTrendPoints(person, metric, days) {
   const points = [];
   const today = new Date();
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = days; i >= 1; i--) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const ds = dstr(d);
     let value;
@@ -2264,10 +2270,12 @@ function calRenderTrendChart() {
   calRenderRecap();
 }
 
+// i starts at 1 (yesterday), not 0 (today) — today is still in progress so it's excluded
+// from both the day count and the averages, same reasoning as calTrendPoints.
 function calRecapStats(person, days) {
   const today = new Date();
   let daysLogged = 0, daysCalMet = 0, daysProtMet = 0, sumCal = 0, sumProt = 0;
-  for (let i = 0; i < days; i++) {
+  for (let i = 1; i <= days; i++) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const ds = dstr(d);
     if (calDayItems(person, ds).length === 0) continue;
@@ -2924,15 +2932,18 @@ function trRenderOverview(plan) {
 
     <h2 style="margin-top:20px;">Overview</h2>
     <p class="card-sub">${plan.goal}</p>
-    <div class="section-title">Flexible scheduling rules</div>
-    <ul class="rule-list">${plan.rules.map(r => `<li>${r}</li>`).join('')}</ul>
-    <div class="section-title">Muscle frequency check</div>
-    <table class="freq-table">
-      <tr><th>Muscle group</th><th>Hit on</th><th>Frequency</th></tr>
-      ${plan.frequency.map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`).join('')}
-    </table>
-    <div class="section-title">Notes</div>
-    <ul class="rule-list">${plan.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+    <details class="tr-overview-details">
+      <summary>Rules, muscle frequency &amp; notes</summary>
+      <div class="section-title">Flexible scheduling rules</div>
+      <ul class="rule-list">${plan.rules.map(r => `<li>${r}</li>`).join('')}</ul>
+      <div class="section-title">Muscle frequency check</div>
+      <table class="freq-table">
+        <tr><th>Muscle group</th><th>Hit on</th><th>Frequency</th></tr>
+        ${plan.frequency.map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`).join('')}
+      </table>
+      <div class="section-title">Notes</div>
+      <ul class="rule-list">${plan.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+    </details>
   `;
 }
 
@@ -3160,7 +3171,7 @@ function trRenderDay(day, dayKey) {
 
     <div class="section-title" style="margin-top:20px;">Progress</div>
     <select id="trProgressExercise" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; margin-bottom:4px;">
-      ${list.map((ex, i) => `<option value="${i}">${ex[0]}</option>`).join('')}
+      ${trProgressExerciseNames(trActivePerson, dayKey, trActiveVariant, list).map(o => `<option value="${o.name}">${o.name}${o.retired ? ' (no longer in plan)' : ''}</option>`).join('')}
     </select>
     <div id="trProgressChart"></div>
   `;
@@ -3173,11 +3184,25 @@ function trExerciseProgressPoints(person, dayKey, variant, exerciseName) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function trRenderProgressChart(list) {
+// Progress dropdown options: current plan exercises first, plus any exercise names that
+// have historical logs for this day/variant but were later removed from the plan (e.g. a
+// swapped exercise) — those must stay selectable so their past progress data doesn't
+// become unreachable just because the plan changed.
+function trProgressExerciseNames(person, dayKey, variant, list) {
+  const planNames = list.map(ex => ex[0]);
+  const logged = new Set();
+  (trTrainingLog[person] || []).forEach(l => {
+    if (l.day === dayKey && l.variant === variant) Object.keys(l.weights).forEach(n => logged.add(n));
+  });
+  const retired = [...logged].filter(n => !planNames.includes(n));
+  return planNames.concat(retired).map(name => ({ name, retired: !planNames.includes(name) }));
+}
+
+function trRenderProgressChart() {
   const select = document.getElementById('trProgressExercise');
   const chartEl = document.getElementById('trProgressChart');
   if (!select || !chartEl) return;
-  const exName = list[parseInt(select.value)] ? list[parseInt(select.value)][0] : null;
+  const exName = select.value || null;
   if (!exName) { chartEl.innerHTML = ''; return; }
   const points = trExerciseProgressPoints(trActivePerson, trActiveDay, trActiveVariant, exName);
   chartEl.innerHTML = buildTrendChart(points, { color: '--' + trActivePerson, unit: 'kg', detailId: 'trProgressDetail' });
@@ -3417,8 +3442,8 @@ function trRenderContent() {
 
     const progressSelect = document.getElementById('trProgressExercise');
     if (progressSelect) {
-      progressSelect.addEventListener('change', () => trRenderProgressChart(list));
-      trRenderProgressChart(list);
+      progressSelect.addEventListener('change', trRenderProgressChart);
+      trRenderProgressChart();
     }
 
     document.querySelectorAll('#trContent .pl-del').forEach(btn => {
