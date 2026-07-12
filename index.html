@@ -61,6 +61,7 @@
   .card .card-sub { font-size:13px; color:var(--text-secondary); margin:0 0 14px; }
   #setupArrow { font-size:12px; color:var(--text-muted); transition:transform 0.15s; }
   #setupBody.collapsed { display:none; }
+  .collapsible-body.collapsed { display:none; }
   .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .settings-row > div { flex:1; min-width:120px; }
   .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
@@ -100,7 +101,7 @@
   .today-grid-inner { display:grid; grid-template-columns:1fr auto auto; row-gap:9px; column-gap:14px; align-items:center; }
   .today-person { font-size:12px; font-weight:600; text-align:center; }
   .today-label { font-size:13px; color:var(--text-secondary); }
-  .today-pill { font-size:12px; font-weight:700; text-align:center; padding:4px 0; border-radius:8px; min-width:34px; }
+  .today-pill { font-size:12px; font-weight:700; text-align:center; padding:4px 0; border-radius:8px; min-width:34px; border:none; font-family:inherit; cursor:pointer; }
   .today-pill.done { background:var(--green-bg); color:var(--green-text); }
   .today-pill.pending { background:var(--border); color:var(--text-muted); }
   .heatmap { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:12px; }
@@ -215,6 +216,7 @@
   .log-date-row input { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
   .log-weight-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
   .log-weight-row .lw-name { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
+  .log-weight-row .lw-last { font-size:11px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
   .log-weight-row input { width:90px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
   .past-log-row { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; background:var(--bg); }
   .past-log-row:last-child { margin-bottom:0; }
@@ -272,10 +274,12 @@
     <div class="person-tabs" id="wkPersonTabs"></div>
 
     <div class="card">
-      <h2>Days needed per category</h2>
-      <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-      <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
-      <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      <h2 id="wkThresholdsToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Days needed per category <span id="wkThresholdsArrow">&#9656;</span></h2>
+      <div id="wkThresholdsBody" class="collapsible-body">
+        <div class="cat-threshold-row"><span class="catlabel">Nutrition</span><input type="number" id="thNutrition" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+        <div class="cat-threshold-row"><span class="catlabel">Screen time</span><input type="number" id="thScreen" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+        <div class="cat-threshold-row"><span class="catlabel">Sport</span><input type="number" id="thSport" min="1" max="7" value="5"><span class="of7">/ 7</span></div>
+      </div>
     </div>
 
     <div class="card">
@@ -369,6 +373,14 @@
 
       <div class="cal-rings" id="calRings"></div>
       <div id="foodItemsList"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="foodBankToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Food bank <span id="foodBankArrow">&#9656;</span></h2>
+      <div id="foodBankBody" class="collapsible-body">
+        <p class="card-sub">Every food saved from past logging, shared by both of you. Edit or delete a reference value here directly, without having to re-log it.</p>
+        <div id="foodBankList"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -549,20 +561,56 @@ function renderTodayCard() {
   const trDone = pk => trLogsForDate(pk, today).length > 0 || (trCoreLog[pk] || []).includes(today)
     || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((trExtraLog[pk] || {})[act] || []).includes(today))
     || (pk === 'p1' && (trStepsCheckLog.p1 || []).includes(today));
-  const rows = [['Weekly', wkDone], ['Calories', calDone], ['Training', trDone]];
-  const pill = done => `<span class="today-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>`;
+  const rows = [['Weekly', 'weekly', wkDone], ['Calories', 'calories', calDone], ['Training', 'training', trDone]];
+  const pill = (tab, pk, done) => `<button type="button" class="today-pill ${done ? 'done' : 'pending'}" data-tab="${tab}" data-p="${pk}" title="Go to ${tab} for ${pk === 'p1' ? sharedSettings.p1 : sharedSettings.p2}">${done ? '✓' : '—'}</button>`;
   el.innerHTML = `
     <div class="today-grid-inner">
       <span></span>
       <span class="today-person" style="color:var(--p1)">${sharedSettings.p1}</span>
       <span class="today-person" style="color:var(--p2)">${sharedSettings.p2}</span>
-      ${rows.map(([label, fn]) => `
+      ${rows.map(([label, tab, fn]) => `
         <span class="today-label">${label}</span>
-        ${pill(fn('p1'))}
-        ${pill(fn('p2'))}
+        ${pill(tab, 'p1', fn('p1'))}
+        ${pill(tab, 'p2', fn('p2'))}
       `).join('')}
     </div>
   `;
+  el.querySelectorAll('.today-pill').forEach(btn => {
+    btn.addEventListener('click', () => jumpToToday(btn.dataset.tab, btn.dataset.p));
+  });
+}
+
+// Jumps from the Today card straight to the relevant tab, with that person selected and
+// today's date preset — so seeing a "—" is one tap away from actually logging it, instead
+// of requiring a manual tab switch + person switch + date pick.
+function jumpToToday(tab, pk) {
+  showTab(tab);
+  const today = todayStr();
+  if (tab === 'weekly') {
+    wkActivePerson = pk;
+    saveActivePerson('wkActivePerson', pk);
+    wkViewedWeekMonday = getMonday(new Date());
+    document.getElementById('wkDatePicker').value = today;
+    wkRenderPersonTabs();
+    wkLoadCheckboxesForDate();
+    wkRenderAll();
+  } else if (tab === 'calories') {
+    calActivePerson = pk;
+    saveActivePerson('calActivePerson', pk);
+    document.getElementById('calDatePicker').value = today;
+    calSelectedMonthDate = today;
+    calRenderPersonTabs();
+    calRenderAll();
+    calRenderWeightCard();
+    calRenderBurnCard();
+  } else if (tab === 'training') {
+    trActivePerson = pk;
+    saveActivePerson('trActivePerson', pk);
+    trActiveDay = 'overview';
+    trOverviewSelectedDate = today;
+    trRenderAll();
+  }
+  document.getElementById(SECTION_IDS[tab]).scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function loadActivePerson(key) {
@@ -887,7 +935,7 @@ function wkRenderHistory() {
       const chips = CATS.map(([k,l]) => {
         const met = counts[k] >= thresholds[k];
         if (!met) fine = true;
-        return `<span class="status ${met?'met':'missed'}" title="${l}: ${counts[k]}/${thresholds[k]}">${l}</span>`;
+        return `<span class="status ${met?'met':'missed'}" title="${l}: ${counts[k]}/${thresholds[k]}">${l} ${counts[k]}/${thresholds[k]}</span>`;
       }).join('');
       return `<div class="history-person${fine?'':' celebrate'}">
         <span class="pname">${name}</span>
@@ -901,6 +949,15 @@ function wkRenderHistory() {
     </div>`;
   }).join('');
 }
+
+function setWkThresholdsCollapsed(collapsed) {
+  document.getElementById('wkThresholdsBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('wkThresholdsArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('wkThresholdsCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+document.getElementById('wkThresholdsToggle').addEventListener('click', () => {
+  setWkThresholdsCollapsed(!document.getElementById('wkThresholdsBody').classList.contains('collapsed'));
+});
 
 document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
   row.addEventListener('click', (evt) => {
@@ -1247,6 +1304,23 @@ function calCumulativeDeficit(person) {
   return total;
 }
 
+// A day only counts toward the deficit total if it has BOTH a burn entry and logged food
+// (see calDailyDeficit) — most days that are missing one or the other drop out silently.
+// This tells you how much of the tracked window actually got counted, so the big total
+// doesn't read as more complete than it is.
+function calDeficitDayCoverage(person) {
+  const allDates = [...Object.keys(calBurnLog[person] || {}), ...Object.keys(calEntries[person] || {})];
+  if (allDates.length === 0) return { counted: 0, totalDays: 0 };
+  const start = parseDate(allDates.sort()[0]);
+  const totalDays = Math.floor((new Date() - start) / 86400000) + 1;
+  let counted = 0;
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    if (calDailyDeficit(person, dstr(d)) !== null) counted++;
+  }
+  return { counted, totalDays };
+}
+
 function calRenderDeficitCard() {
   const el = document.getElementById('calDeficitBig');
   const card = document.getElementById('calDeficitCard');
@@ -1260,6 +1334,7 @@ function calRenderDeficitCard() {
   const weekTotal = calWeekDeficit(calActivePerson, getMonday(new Date()));
   const pct = Math.max(0, Math.min(100, (total / CAL_DEFICIT_GOAL) * 100));
   const kg = total / CAL_KCAL_PER_KG;
+  const coverage = calDeficitDayCoverage(calActivePerson);
   el.innerHTML = `
     <div style="text-align:center; padding:8px 0;">
       <div style="font-size:36px; font-weight:700; color:var(--${calActivePerson});">${Math.round(total).toLocaleString()}</div>
@@ -1269,6 +1344,7 @@ function calRenderDeficitCard() {
       </div>
     </div>
     <div class="recap-row"><span class="rname">This week's deficit</span><span class="rvalue">${Math.round(weekTotal).toLocaleString()} kcal</span></div>
+    <div class="recap-row" title="A day only counts if it has both a calories-burned entry and logged food"><span class="rname">Days counted</span><span class="rvalue">${coverage.counted} of ${coverage.totalDays}</span></div>
   `;
 }
 
@@ -1527,10 +1603,15 @@ async function calPushToCloud(opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
   try {
     await ensureAuth();
-    try {
-      const snap = await getDoc(doc(db, 'calories', coupleCode));
-      if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
-    } catch (err) { console.error('Could not merge remote data before push:', err); }
+    // calMergeFoodBank unions by name, so it can't tell "removed locally" apart from
+    // "never existed" — a deleted bank entry would otherwise get resurrected from the
+    // stale remote copy. Skip the merge right after a delete and trust the local list.
+    if (!opts.skipMerge) {
+      try {
+        const snap = await getDoc(doc(db, 'calories', coupleCode));
+        if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
+      } catch (err) { console.error('Could not merge remote data before push:', err); }
+    }
     const writeOpts = opts.replace ? {} : { merge: true };
     const payload = {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals },
@@ -1875,7 +1956,7 @@ function calSearchOnGoogle() {
   if (!name) { alert('Enter a food name first.'); return; }
   const amount = document.getElementById('foodGrams').value || '100';
   const unit = document.getElementById('foodUnit').value;
-  const q = unit === 'piece' ? `${name} calories protein per piece` : `${name} calories protein per ${amount}g`;
+  const q = unit === 'piece' ? `${name} calories and macros per piece` : `${name} calories and macros per ${amount}g`;
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
@@ -1948,6 +2029,9 @@ async function calAddItem() {
 function calDeleteItem(index) {
   const ds = calSelectedDate();
   const items = calDayItems(calActivePerson, ds);
+  const item = items[index];
+  if (!item) return;
+  if (!confirm(`Delete "${item.name}" from this day's log?`)) return;
   items.splice(index, 1);
   if (calEditingIndex === index) calClearManualFields();
   try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {}
@@ -2121,6 +2205,111 @@ function calRenderLogCard() {
     calProgressRing('Protein', Math.abs(protLeft), protLabel, goal.protein > 0 ? totals.protein / goal.protein : 0, protStatus) +
     calProgressRing('Carbs', Math.round(Math.abs(carbLeft)), carbLeft >= 0 ? 'g left' : 'g over', carbGoal > 0 ? totals.carbs / carbGoal : 0, carbStatus) +
     calProgressRing('Fat', Math.round(Math.abs(fatLeft)), fatLeft >= 0 ? 'g left' : 'g over', fatGoal > 0 ? totals.fat / fatGoal : 0, fatStatus);
+}
+
+// Which bank entry (keyed by its "de" name, same key calMergeFoodBank uses) is currently
+// showing its inline edit form, if any. Only one at a time.
+let calBankEditingKey = null;
+
+function calFoodBankRowHtml(entry) {
+  const unit = entry.preferredUnit || 'gram';
+  const ref = entry[unit];
+  const key = entry.de;
+  const unitLabel = unit === 'piece' ? 'piece' : '100g';
+  if (calBankEditingKey === key) {
+    return `
+    <div class="food-item" style="display:block;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:6px;">${entry.en} / ${entry.de}</div>
+      <select class="fb-edit-category" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; margin-bottom:6px;">
+        ${CAL_CATEGORIES.map(c => `<option value="${c}" ${entry.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <div class="manual-grid macros">
+        <div><label>Calories</label><input type="number" class="fb-edit-calories" min="0" value="${ref ? ref.calories : ''}"></div>
+        <div><label>Protein (g)</label><input type="number" class="fb-edit-protein" min="0" value="${ref ? ref.protein : ''}"></div>
+        <div><label>Carbs (g)</label><input type="number" class="fb-edit-carbs" min="0" value="${ref ? ref.carbs : ''}"></div>
+        <div><label>Fat (g)</label><input type="number" class="fb-edit-fat" min="0" value="${ref ? ref.fat : ''}"></div>
+      </div>
+      <p class="card-sub" style="margin:4px 0 8px;">Per ${unitLabel}</p>
+      <label class="core-check-inline" style="margin-bottom:8px;">
+        <input type="checkbox" class="fb-edit-locked" ${entry.locked !== false ? 'checked' : ''}>
+        <span>Locked (protects it from one-off log edits)</span>
+      </label>
+      <div style="display:flex; gap:8px;">
+        <button class="primary fb-save" data-key="${key}" style="flex:1;">Save</button>
+        <button type="button" class="link-btn fb-cancel">Cancel</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="food-item">
+    <span class="fi-name">${entry.en} / ${entry.de}${entry.locked !== false ? ' &#128274;' : ''}</span>
+    <span class="fi-macros">${ref ? `${ref.calories} · ${ref.protein}P · ${ref.carbs}C · ${ref.fat}F` : 'no data'} <span style="color:var(--text-muted)">/ ${unitLabel}</span></span>
+    <button class="fi-edit fb-edit" data-key="${key}" title="Edit">&#9998;</button>
+    <button class="fi-del fb-del" data-key="${key}" title="Delete">&times;</button>
+  </div>`;
+}
+
+function calRenderFoodBankList() {
+  const el = document.getElementById('foodBankList');
+  if (!el) return;
+  if (calFoodBank.length === 0) {
+    el.innerHTML = '<div class="empty-state" style="padding:8px 0;">No foods saved yet — foods you log get saved here automatically.</div>';
+    return;
+  }
+  const groups = {};
+  calFoodBank.forEach(entry => {
+    const cat = entry.category || 'Other';
+    (groups[cat] || (groups[cat] = [])).push(entry);
+  });
+  const orderedCats = CAL_CATEGORIES.filter(c => groups[c]);
+  Object.keys(groups).forEach(c => { if (!orderedCats.includes(c)) orderedCats.push(c); });
+  orderedCats.forEach(c => groups[c].sort((a, b) => a.en.localeCompare(b.en)));
+
+  el.innerHTML = orderedCats.map(cat => `
+    <div class="food-cat-title">${cat}</div>
+    ${groups[cat].map(calFoodBankRowHtml).join('')}
+  `).join('');
+
+  el.querySelectorAll('.fb-edit').forEach(btn => {
+    btn.addEventListener('click', () => { calBankEditingKey = btn.dataset.key; calRenderFoodBankList(); });
+  });
+  el.querySelectorAll('.fb-cancel').forEach(btn => {
+    btn.addEventListener('click', () => { calBankEditingKey = null; calRenderFoodBankList(); });
+  });
+  el.querySelectorAll('.fb-save').forEach(btn => {
+    btn.addEventListener('click', () => calSaveFoodBankEdit(btn.dataset.key, btn.closest('.food-item')));
+  });
+  el.querySelectorAll('.fb-del').forEach(btn => {
+    btn.addEventListener('click', () => calDeleteFoodBankEntry(btn.dataset.key));
+  });
+}
+
+function calSaveFoodBankEdit(key, row) {
+  const entry = calFoodBank.find(f => f.de === key);
+  if (!entry || !row) return;
+  const unit = entry.preferredUnit || 'gram';
+  entry.category = row.querySelector('.fb-edit-category').value;
+  entry[unit] = {
+    calories: Math.round(parseFloat(row.querySelector('.fb-edit-calories').value) || 0),
+    protein: calRound2(parseFloat(row.querySelector('.fb-edit-protein').value) || 0),
+    carbs: calRound2(parseFloat(row.querySelector('.fb-edit-carbs').value) || 0),
+    fat: calRound2(parseFloat(row.querySelector('.fb-edit-fat').value) || 0)
+  };
+  entry.locked = row.querySelector('.fb-edit-locked').checked;
+  calBankEditingKey = null;
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+  calRenderFoodBankList();
+  calPushToCloud();
+}
+
+function calDeleteFoodBankEntry(key) {
+  const entry = calFoodBank.find(f => f.de === key);
+  if (!entry) return;
+  if (!confirm(`Delete "${entry.en} / ${entry.de}" from the food bank? Days you've already logged it on keep their own values — this only removes it as a saved shortcut for next time.`)) return;
+  calFoodBank = calFoodBank.filter(f => f.de !== key);
+  calBankEditingKey = null;
+  try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
+  calRenderFoodBankList();
+  calPushToCloud({ skipMerge: true });
 }
 
 // Shared by the calorie and training monthly calendars.
@@ -2326,6 +2515,7 @@ function calRenderRecap() {
 
 function calRenderAll() {
   calRenderLogCard();
+  calRenderFoodBankList();
   calRenderMonth();
   calRenderTrendChart();
   calRenderDeficitCard();
@@ -2405,6 +2595,15 @@ document.querySelectorAll('#calTrendTabs button').forEach(btn => {
     document.querySelectorAll('#calTrendTabs button').forEach(b => b.classList.toggle('active', b === btn));
     calRenderTrendChart();
   });
+});
+
+function setFoodBankCollapsed(collapsed) {
+  document.getElementById('foodBankBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('foodBankArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('foodBankCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+document.getElementById('foodBankToggle').addEventListener('click', () => {
+  setFoodBankCollapsed(!document.getElementById('foodBankBody').classList.contains('collapsed'));
 });
 
 document.getElementById('calResetBtn').addEventListener('click', async () => {
@@ -2900,7 +3099,7 @@ function trRenderOverview(plan) {
   const p2Count = trWeekLogCount('p2', weekMonday);
   const total = p1Count + p2Count;
   const bothTrainedLine = total > 0 ? `<div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
-    ${p1Count > 0 && p2Count > 0 ? '🎉 You\'ve both trained this week — ' : ''}sessions this week: <span style="color:var(--p1); font-weight:600;">${sharedSettings.p1} ${p1Count}</span> &middot; <span style="color:var(--p2); font-weight:600;">${sharedSettings.p2} ${p2Count}</span>
+    ${p1Count > 0 && p2Count > 0 ? '🎉 You\'ve both trained this week — ' : ''}sessions this week: <span style="color:var(--p1); font-weight:600;">${sharedSettings.p1} ${p1Count}/${TR_STREAK_MIN_LOGS}</span> &middot; <span style="color:var(--p2); font-weight:600;">${sharedSettings.p2} ${p2Count}/${TR_STREAK_MIN_LOGS}</span>
   </div>` : '';
   return `
     ${streak > 0 ? `<div class="tr-streak-badge" title="Consecutive weeks with ${TR_STREAK_MIN_LOGS}+ workout or other logged activity (core stability doesn't count as its own session)">&#128293; ${streak}-week streak (${TR_STREAK_MIN_LOGS}+ sessions every week)</div>` : ''}
@@ -3158,7 +3357,7 @@ function trRenderDay(day, dayKey) {
       <input type="date" id="logDate">
     </div>
     <div id="logWeights">
-      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
+      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><span class="lw-last" id="lwLast_${i}"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
     </div>
     <button class="primary" id="saveLogBtn">Save log</button>
 
@@ -3231,10 +3430,13 @@ function trLoadLogIntoForm(dayKey, list, variant) {
   const dateInput = document.getElementById('logDate');
   const date = dateInput.value;
   const existing = trFindLog(trActivePerson, dayKey, date, variant);
+  const prev = trFindPreviousLog(trActivePerson, dayKey, variant, date);
   list.forEach((ex, i) => {
     const input = document.getElementById('logW_' + i);
     if (!input) return;
     input.value = existing && existing.weights[ex[0]] !== undefined ? existing.weights[ex[0]] : '';
+    const hint = document.getElementById('lwLast_' + i);
+    if (hint) hint.textContent = prev && prev.weights[ex[0]] !== undefined ? `last: ${prev.weights[ex[0]]}kg` : '';
   });
 }
 
@@ -3257,6 +3459,7 @@ function trSaveLog(dayKey, list, variant) {
 }
 
 function trDeleteLog(dayKey, date, variant) {
+  if (!confirm(`Delete the workout logged on ${date}?`)) return;
   const arr = trTrainingLog[trActivePerson] || [];
   const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
   if (idx >= 0) arr.splice(idx, 1);
@@ -3580,6 +3783,14 @@ trSubscribeToCloud(coupleCode);
 let initialSetupCollapsed = true;
 try { initialSetupCollapsed = localStorage.getItem('setupCollapsed') !== '0'; } catch (err) {}
 setSetupCollapsed(initialSetupCollapsed);
+
+let initialWkThresholdsCollapsed = true;
+try { initialWkThresholdsCollapsed = localStorage.getItem('wkThresholdsCollapsed') !== '0'; } catch (err) {}
+setWkThresholdsCollapsed(initialWkThresholdsCollapsed);
+
+let initialFoodBankCollapsed = true;
+try { initialFoodBankCollapsed = localStorage.getItem('foodBankCollapsed') !== '0'; } catch (err) {}
+setFoodBankCollapsed(initialFoodBankCollapsed);
 
 let initialTab = 'weekly';
 try {
