@@ -97,6 +97,12 @@
   .week-col .pname { font-size:13px; font-weight:600; margin-bottom:10px; }
   .streak-badge { font-size:11px; font-weight:600; color:var(--amber-text); background:var(--amber-bg); border:1px solid var(--amber-border); border-radius:100px; padding:2px 8px; white-space:nowrap; }
   .tr-streak-badge { font-size:12px; font-weight:600; color:var(--amber-text); background:var(--amber-bg); border:1px solid var(--amber-border); border-radius:100px; padding:3px 10px; display:inline-block; margin-bottom:10px; }
+  .today-grid-inner { display:grid; grid-template-columns:1fr auto auto; row-gap:9px; column-gap:14px; align-items:center; }
+  .today-person { font-size:12px; font-weight:600; text-align:center; }
+  .today-label { font-size:13px; color:var(--text-secondary); }
+  .today-pill { font-size:12px; font-weight:700; text-align:center; padding:4px 0; border-radius:8px; min-width:34px; }
+  .today-pill.done { background:var(--green-bg); color:var(--green-text); }
+  .today-pill.pending { background:var(--border); color:var(--text-muted); }
   .heatmap { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:12px; }
   .heat-day { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
   .heat-square { width:100%; aspect-ratio:1; border-radius:5px; background:var(--heat-0); }
@@ -117,8 +123,10 @@
   .history-week { border-bottom:1px solid var(--border); padding:12px 0; }
   .history-week:last-child { border-bottom:none; }
   .history-week .wk-title { font-size:13px; font-weight:600; margin-bottom:8px; }
-  .history-person { display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:6px; }
+  .history-person { display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:6px; padding-left:6px; border-left:3px solid transparent; }
+  .history-person.celebrate { border-left-color:var(--green-border); }
   .history-person .pname { width:70px; color:var(--text-secondary); flex-shrink:0; }
+  .history-cats { flex:1; display:flex; flex-wrap:wrap; gap:4px; min-width:0; }
   .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:1rem 0; }
   .link-btn { background:none; border:none; color:var(--text-muted); font-size:12px; text-decoration:underline; cursor:pointer; padding:4px; }
   .footer-actions { display:flex; justify-content:flex-end; margin-top:1.5rem; }
@@ -244,6 +252,11 @@
     </div>
   </div>
 
+  <div class="card" id="todayCard">
+    <h2>Today</h2>
+    <div id="todayGrid"></div>
+  </div>
+
   <div class="main-tabs">
     <button data-tab="weekly" class="active">Weekly</button>
     <button data-tab="calories">Calories</button>
@@ -308,13 +321,14 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="calDeficitCard">
       <h2>Deficit progress</h2>
       <div id="calDeficitBig"></div>
     </div>
 
     <div class="card">
       <h2>Log food</h2>
+      <div id="calStreakBadge"></div>
       <div class="date-picker-row">
         <label>Date</label>
         <input type="date" id="calDatePicker">
@@ -470,7 +484,7 @@ function saveSharedSettings() {
   sharedSettings.p2 = document.getElementById('p2Name').value || 'Partner';
   try { localStorage.setItem('sharedSettings', JSON.stringify(sharedSettings)); } catch (err) {}
   wkRenderPersonTabs(); wkRenderAll();
-  calRenderPersonTabs(); calRenderAll();
+  calRenderPersonTabs(); calPopulateGoalsInputs(); calRenderAll();
   trRenderPersonTabs(); trRenderDayTabs(); trRenderContent();
   wkPushToCloud(); calPushToCloud(); trPushToCloud();
 }
@@ -514,6 +528,32 @@ function showTab(tab) {
 document.querySelectorAll('.main-tabs button').forEach(b => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
 });
+
+// At-a-glance "did I/we do everything today" strip shown above the tabs regardless of
+// which one is active — without it you'd have to visit all 3 tabs to know your own full
+// status, let alone your partner's.
+function renderTodayCard() {
+  const el = document.getElementById('todayGrid');
+  if (!el) return;
+  const today = todayStr();
+  const wkDone = pk => !!((wkEntries[pk] || {})[today]);
+  const calDone = pk => calDayItems(pk, today).length > 0;
+  const trDone = pk => trLogsForDate(pk, today).length > 0 || (trCoreLog[pk] || []).includes(today);
+  const rows = [['Weekly', wkDone], ['Calories', calDone], ['Training', trDone]];
+  const pill = done => `<span class="today-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>`;
+  el.innerHTML = `
+    <div class="today-grid-inner">
+      <span></span>
+      <span class="today-person" style="color:var(--p1)">${sharedSettings.p1}</span>
+      <span class="today-person" style="color:var(--p2)">${sharedSettings.p2}</span>
+      ${rows.map(([label, fn]) => `
+        <span class="today-label">${label}</span>
+        ${pill(fn('p1'))}
+        ${pill(fn('p2'))}
+      `).join('')}
+    </div>
+  `;
+}
 
 function loadActivePerson(key) {
   try { const v = localStorage.getItem(key); return (v === 'p1' || v === 'p2') ? v : 'p1'; } catch (err) { return 'p1'; }
@@ -747,6 +787,7 @@ function wkCurrentStreak(person) {
 function wkRenderAll() {
   wkRenderThisWeek();
   wkRenderHistory();
+  renderTodayCard();
 }
 
 function wkRenderThisWeek() {
@@ -832,13 +873,16 @@ function wkRenderHistory() {
     const rows = ['p1','p2'].map(pk => {
       const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
       const counts = wkCatCountsForWeek(pk, monday);
-      const missed = CATS.filter(([k]) => counts[k] < thresholds[k]).map(([k,l])=>l+' ('+counts[k]+'/'+thresholds[k]+')');
-      const fine = missed.length > 0;
-      const detail = missed.length ? 'missed: ' + missed.join(', ') : 'all categories met';
-      return `<div class="history-person">
+      let fine = false;
+      const chips = CATS.map(([k,l]) => {
+        const met = counts[k] >= thresholds[k];
+        if (!met) fine = true;
+        return `<span class="status ${met?'met':'missed'}" title="${l}: ${counts[k]}/${thresholds[k]}">${l}</span>`;
+      }).join('');
+      return `<div class="history-person${fine?'':' celebrate'}">
         <span class="pname">${name}</span>
-        <span style="flex:1">${detail}</span>
-        <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'No fine'}</span>
+        <span class="history-cats">${chips}</span>
+        <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'🎉 No fine'}</span>
       </div>`;
     }).join('');
     return `<div class="history-week">
@@ -1195,7 +1239,13 @@ function calCumulativeDeficit(person) {
 
 function calRenderDeficitCard() {
   const el = document.getElementById('calDeficitBig');
+  const card = document.getElementById('calDeficitCard');
   if (!el) return;
+  // The 50,000 kcal / ~7kg deficit goal (CAL_DEFICIT_GOAL above) was set as a personal
+  // target, not a shared couple feature — only show it for the person it was defined for
+  // rather than presenting the other person with a goal they never set.
+  if (card) card.style.display = calActivePerson === 'p1' ? '' : 'none';
+  if (calActivePerson !== 'p1') return;
   const total = calCumulativeDeficit(calActivePerson);
   const weekTotal = calWeekDeficit(calActivePerson, getMonday(new Date()));
   const pct = Math.max(0, Math.min(100, (total / CAL_DEFICIT_GOAL) * 100));
@@ -1541,6 +1591,13 @@ function calPopulateGoalsInputs() {
   document.getElementById('p1ProtGoal').value = calGoals.p1.protein;
   document.getElementById('p2CalGoal').value = calGoals.p2.calories;
   document.getElementById('p2ProtGoal').value = calGoals.p2.protein;
+  // These labels used to read the same generic "Calorie goal (max, kcal)" text for both
+  // people with nothing to tell the two rows apart beyond position in the layout — prefix
+  // with the actual name so it's unambiguous which row is whose.
+  document.getElementById('p1CalLabel').textContent = sharedSettings.p1 + ' — Calorie goal (max, kcal)';
+  document.getElementById('p1ProtLabel').textContent = sharedSettings.p1 + ' — Protein goal (min, g)';
+  document.getElementById('p2CalLabel').textContent = sharedSettings.p2 + ' — Calorie goal (max, kcal)';
+  document.getElementById('p2ProtLabel').textContent = sharedSettings.p2 + ' — Protein goal (min, g)';
 }
 
 async function calSaveGoals() {
@@ -1595,6 +1652,29 @@ function calSelectedDate() { return document.getElementById('calDatePicker').val
 
 function calDayItems(person, dateStr) {
   return ((calEntries[person] || {})[dateStr] || {}).items || [];
+}
+
+// Consecutive days with at least one food item logged, ending today — or yesterday if
+// today hasn't been logged yet, so the streak doesn't look broken mid-day before there's
+// been a chance to log anything.
+function calCurrentStreak(person) {
+  let d = new Date();
+  if (calDayItems(person, dstr(d)).length === 0) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (calDayItems(person, dstr(d)).length > 0) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function calRenderStreakBadge() {
+  const el = document.getElementById('calStreakBadge');
+  if (!el) return;
+  const streak = calCurrentStreak(calActivePerson);
+  el.innerHTML = streak > 0
+    ? `<span class="tr-streak-badge" title="Consecutive days with at least one food item logged">&#128293; ${streak}-day logging streak</span>`
+    : '';
 }
 
 // Binary floating point can't represent most decimals exactly, so repeated addition of
@@ -1970,6 +2050,7 @@ function calFoodItemRowHtml(it, i) {
 function calRenderLogCard() {
   const ds = calSelectedDate();
   const items = calDayItems(calActivePerson, ds);
+  calRenderStreakBadge();
   calRenderRecentChips();
   const listEl = document.getElementById('foodItemsList');
   if (items.length === 0) {
@@ -2071,9 +2152,12 @@ function calRenderMonth() {
       const selected = calSelectedMonthDate === ds && calActivePerson === pk ? ' selected' : '';
       return `<div class="month-day ${status}${selected}" data-date="${ds}" data-person="${pk}" title="${title}"></div>`;
     }).join('');
+    const hasEverLogged = Object.values(calEntries[pk] || {}).some(day => (day.items || []).length > 0);
+    const emptyHint = hasEverLogged ? '' : `<div class="empty-state" style="padding:8px 0 0; text-align:left; font-size:12px;">No food logged yet — use "Log food" above to start.</div>`;
     return `<div class="month-col">
       <div class="pname" style="color:var(--${pk})">${name}</div>
       <div class="month-grid">${squares}</div>
+      ${emptyHint}
     </div>`;
   }).join('');
   wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
@@ -2117,6 +2201,11 @@ function calTrendPoints(person, metric, days) {
 function buildTrendChart(points, opts) {
   if (points.length === 0) {
     return '<div class="empty-state" style="padding:1rem 0;">Not enough data yet.</div>';
+  }
+  // A single point can't show a trend line — an axis stretched around one dot reads as
+  // broken rather than "just getting started," so say that explicitly instead.
+  if (points.length === 1) {
+    return `<div class="empty-state" style="padding:1rem 0;">First value logged: ${points[0].value}${opts.unit || ''} on ${points[0].date}. Log one more to see a trend.</div>`;
   }
   const width = 320, height = 130, padL = 34, padR = 10, padT = 12, padB = 20;
   const plotW = width - padL - padR, plotH = height - padT - padB;
@@ -2217,6 +2306,7 @@ function calRenderAll() {
   calRenderMonth();
   calRenderTrendChart();
   calRenderDeficitCard();
+  renderTodayCard();
 }
 
 function calLoadData() {
@@ -2747,8 +2837,16 @@ function trExRow([name, reps, url]) {
 
 function trRenderOverview(plan) {
   const streak = trCurrentStreak(trActivePerson);
+  const weekMonday = getMonday(new Date());
+  const p1Count = trWeekLogCount('p1', weekMonday);
+  const p2Count = trWeekLogCount('p2', weekMonday);
+  const total = p1Count + p2Count;
+  const bothTrainedLine = total > 0 ? `<div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
+    ${p1Count > 0 && p2Count > 0 ? '🎉 You\'ve both trained this week — ' : ''}sessions this week: <span style="color:var(--p1); font-weight:600;">${sharedSettings.p1} ${p1Count}</span> &middot; <span style="color:var(--p2); font-weight:600;">${sharedSettings.p2} ${p2Count}</span>
+  </div>` : '';
   return `
     ${streak > 0 ? `<div class="tr-streak-badge" title="Consecutive weeks with ${TR_STREAK_MIN_LOGS}+ workout or core-stability sessions logged">&#128293; ${streak}-week streak (${TR_STREAK_MIN_LOGS}+ sessions every week)</div>` : ''}
+    ${bothTrainedLine}
     <h2>Training log calendar</h2>
     <div class="month-nav">
       <button id="trOverviewPrevMonthBtn">&larr;</button>
@@ -3196,6 +3294,7 @@ function trRenderAll() {
   trRenderPersonTabs();
   trRenderDayTabs();
   trRenderContent();
+  renderTodayCard();
 }
 
 function trLoadData() {
