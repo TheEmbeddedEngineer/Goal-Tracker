@@ -124,10 +124,9 @@
   .history-week { border-bottom:1px solid var(--border); padding:12px 0; }
   .history-week:last-child { border-bottom:none; }
   .history-week .wk-title { font-size:13px; font-weight:600; margin-bottom:8px; }
-  .history-person { display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:6px; padding-left:6px; border-left:3px solid transparent; }
+  .history-person { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; margin-bottom:6px; padding-left:6px; border-left:3px solid transparent; }
   .history-person.celebrate { border-left-color:var(--green-border); }
-  .history-person .pname { width:70px; color:var(--text-secondary); flex-shrink:0; }
-  .history-cats { flex:1; display:flex; flex-wrap:wrap; gap:4px; min-width:0; }
+  .history-person .pname { color:var(--text-secondary); flex-shrink:0; }
   .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:1rem 0; }
   .link-btn { background:none; border:none; color:var(--text-muted); font-size:12px; text-decoration:underline; cursor:pointer; padding:4px; }
   .footer-actions { display:flex; justify-content:flex-end; margin-top:1.5rem; }
@@ -931,16 +930,10 @@ function wkRenderHistory() {
     const rows = ['p1','p2'].map(pk => {
       const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
       const counts = wkCatCountsForWeek(pk, monday);
-      let fine = false;
-      const chips = CATS.map(([k,l]) => {
-        const met = counts[k] >= thresholds[k];
-        if (!met) fine = true;
-        return `<span class="status ${met?'met':'missed'}" title="${l}: ${counts[k]}/${thresholds[k]}">${l} ${counts[k]}/${thresholds[k]}</span>`;
-      }).join('');
+      const fine = CATS.some(([k]) => counts[k] < thresholds[k]);
       return `<div class="history-person${fine?'':' celebrate'}">
         <span class="pname">${name}</span>
-        <span class="history-cats">${chips}</span>
-        <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'🎉 No fine'}</span>
+        <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'🎉 You rocked!'}</span>
       </div>`;
     }).join('');
     return `<div class="history-week">
