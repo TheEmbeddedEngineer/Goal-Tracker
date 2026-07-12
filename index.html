@@ -236,6 +236,35 @@
   .pl-ex-delta.up { color:var(--up); }
   .pl-ex-delta.down { color:var(--down); }
   .pl-ex-delta.flat { color:var(--text-muted); }
+
+  /* Sync state at a glance even while the Setup card is collapsed */
+  .sync-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); flex-shrink:0; }
+  .sync-dot.on { background:var(--green-border); }
+  .sync-dot.connecting { background:var(--amber-border); }
+  .sync-dot.error { background:var(--red-border); }
+
+  .field-error { color:var(--red-text); font-size:12px; margin:4px 0 8px; }
+  input.input-error { border-color:var(--red-border) !important; }
+
+  .lw-last.has-val { cursor:pointer; text-decoration:underline dotted; }
+
+  /* Bottom tab bar (phones only) — the pages are long, so navigation shouldn't
+     require scrolling back to the top. Desktop keeps the top tabs. */
+  .bottom-nav { display:none; }
+  #updateToast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:60; background:var(--card); border:1px solid var(--border-strong); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); padding:10px 14px; font-size:13px; align-items:center; gap:12px; max-width:calc(100vw - 32px); }
+  #updateToast.show { display:flex; }
+  #updateToast button.primary { width:auto; margin:0; padding:6px 14px; font-size:13px; }
+  #updateToast .toast-dismiss { background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 4px; line-height:1; }
+  @media (max-width: 640px) {
+    .main-tabs { display:none; }
+    body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+    .bottom-nav { display:flex; position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--card); border-top:1px solid var(--border-strong); padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
+    .bottom-nav button { flex:1; display:flex; flex-direction:column; align-items:center; gap:1px; background:none; border:none; color:var(--text-muted); font-size:11px; font-weight:600; cursor:pointer; padding:4px 0; }
+    .bottom-nav button .bn-icon { font-size:18px; line-height:1.2; }
+    .bottom-nav button.active { color:var(--accent); }
+    .day-tabs { flex-wrap:wrap; overflow-x:visible; }
+    #updateToast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  }
 </style>
 </head>
 <body>
@@ -244,7 +273,7 @@
   <p class="sub">Weekly accountability, calories, and training — one shared setup, three trackers.</p>
 
   <div class="card">
-    <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Setup <span id="setupArrow">&#9656;</span></h2>
+    <h2 id="setupToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;"><span style="display:flex; align-items:center; gap:8px;">Setup <span class="sync-dot" id="syncDot"></span></span> <span id="setupArrow">&#9656;</span></h2>
     <div id="setupBody">
       <div class="settings-row">
         <div><label>Person 1 name</label><input type="text" id="p1Name" value="You"></div>
@@ -254,6 +283,7 @@
         <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
       </div>
       <p id="syncStatus" class="sync-status"></p>
+      <button type="button" class="link-btn" id="exportBtn" style="padding:0;">Download backup (JSON)</button>
     </div>
   </div>
 
@@ -317,23 +347,6 @@
     <div class="person-tabs" id="calPersonTabs"></div>
 
     <div class="card">
-      <h2>Goals</h2>
-      <div class="settings-row">
-        <div><label id="p1CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p1CalGoal" min="0" value="2000"></div>
-        <div><label id="p1ProtLabel">Protein goal (min, g)</label><input type="number" id="p1ProtGoal" min="0" value="120"></div>
-      </div>
-      <div class="settings-row">
-        <div><label id="p2CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p2CalGoal" min="0" value="2000"></div>
-        <div><label id="p2ProtLabel">Protein goal (min, g)</label><input type="number" id="p2ProtGoal" min="0" value="120"></div>
-      </div>
-    </div>
-
-    <div class="card" id="calDeficitCard">
-      <h2>Deficit progress</h2>
-      <div id="calDeficitBig"></div>
-    </div>
-
-    <div class="card">
       <h2>Log food</h2>
       <div id="calStreakBadge"></div>
       <div class="date-picker-row">
@@ -346,6 +359,7 @@
         <label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">Food name (English or Deutsch)</label>
         <input type="text" id="foodSearchInput" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
         <div id="foodNameDropdown" class="autocomplete-dropdown"></div>
+        <p id="foodNameError" class="field-error" style="display:none;">Enter a food name.</p>
       </div>
       <div class="manual-grid" style="grid-template-columns: 1fr 1fr;">
         <div><label id="foodAmountLabel">Grams</label><input type="number" id="foodGrams" min="0" value="100"></div>
@@ -372,6 +386,28 @@
 
       <div class="cal-rings" id="calRings"></div>
       <div id="foodItemsList"></div>
+    </div>
+
+    <div class="card" id="calDeficitCard">
+      <h2>Deficit progress</h2>
+      <div id="calDeficitBig"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="calGoalsToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">Goals <span id="calGoalsArrow">&#9656;</span></h2>
+      <div id="calGoalsBody" class="collapsible-body">
+        <div class="settings-row">
+          <div><label id="p1CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p1CalGoal" min="0" value="2000"></div>
+          <div><label id="p1ProtLabel">Protein goal (min, g)</label><input type="number" id="p1ProtGoal" min="0" value="120"></div>
+        </div>
+        <div class="settings-row">
+          <div><label id="p2CalLabel">Calorie goal (max, kcal)</label><input type="number" id="p2CalGoal" min="0" value="2000"></div>
+          <div><label id="p2ProtLabel">Protein goal (min, g)</label><input type="number" id="p2ProtGoal" min="0" value="120"></div>
+        </div>
+        <div class="settings-row">
+          <div style="flex:100%;"><label id="p1BurnLabel">Default daily burn (kcal) — used for deficit days with food logged but no burn entry (0 = off)</label><input type="number" id="p1DefaultBurn" min="0" value="0"></div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -449,6 +485,18 @@
   </div>
 </div>
 
+<nav class="bottom-nav" id="bottomNav">
+  <button data-tab="weekly"><span class="bn-icon">&#128197;</span>Weekly</button>
+  <button data-tab="calories"><span class="bn-icon">&#127822;</span>Calories</button>
+  <button data-tab="training"><span class="bn-icon">&#127947;&#65039;</span>Training</button>
+</nav>
+
+<div id="updateToast">
+  <span>A new version is available.</span>
+  <button class="primary" id="updateReloadBtn">Refresh</button>
+  <button type="button" class="toast-dismiss" id="updateDismissBtn" title="Dismiss">&times;</button>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
@@ -486,7 +534,50 @@ function ensureAuth() {
 function setSyncStatus(text) {
   const el = document.getElementById('syncStatus');
   if (el) el.textContent = text;
+  // Mirror the state onto the always-visible dot in the Setup header, since the
+  // status text itself is hidden whenever the card is collapsed.
+  const dot = document.getElementById('syncDot');
+  if (dot) {
+    let state = '';
+    if (/^Synced/.test(text)) state = 'on';
+    else if (/error/i.test(text)) state = 'error';
+    else if (/^Connecting/.test(text)) state = 'connecting';
+    dot.className = 'sync-dot' + (state ? ' ' + state : '');
+    dot.title = text;
+  }
 }
+
+// Shared guard for the two "Clear all …" links: wiping syncs to the other person's
+// device too, so a lone confirm() is too easy to click through.
+function confirmWipe(what) {
+  if (!confirm(`Clear all ${what} for both people? This syncs to your partner's device too and cannot be undone.`)) return false;
+  const typed = prompt('Type "delete" to confirm:');
+  return typed !== null && typed.trim().toLowerCase() === 'delete';
+}
+
+function downloadBackup() {
+  const data = {
+    exportedAt: new Date().toISOString(),
+    syncCode: coupleCode,
+    sharedSettings,
+    weekly: { entries: wkEntries, weeklyThresholds: wkWeeklyThresholds },
+    calories: {
+      goals: calGoals, dailyGoals: calDailyGoals, entries: calEntries,
+      foodBank: calFoodBank, weightLog: calWeightLog, burnLog: calBurnLog
+    },
+    training: {
+      trainingLog: trTrainingLog, coreLog: trCoreLog,
+      stepsCheckLog: trStepsCheckLog, extraLog: trExtraLog
+    }
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'couple-tracker-backup-' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('exportBtn').addEventListener('click', downloadBackup);
 
 function markSynced() {
   syncReadyCount = Math.min(syncReadyCount + 1, 4);
@@ -541,11 +632,16 @@ function showTab(tab) {
   Object.entries(SECTION_IDS).forEach(([key, id]) => {
     document.getElementById(id).style.display = key === tab ? '' : 'none';
   });
-  document.querySelectorAll('.main-tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.main-tabs button, .bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   try { localStorage.setItem('activeTab', tab); } catch (err) {}
 }
 document.querySelectorAll('.main-tabs button').forEach(b => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+// Bottom-nav taps also jump back to the top: on a phone you're usually deep down a
+// long page when switching, and landing mid-scroll in another tab is disorienting.
+document.querySelectorAll('.bottom-nav button').forEach(b => {
+  b.addEventListener('click', () => { showTab(b.dataset.tab); window.scrollTo({ top: 0 }); });
 });
 
 // At-a-glance "did I/we do everything today" strip shown above the tabs regardless of
@@ -977,9 +1073,7 @@ document.getElementById('wkDatePicker').addEventListener('change', wkLoadCheckbo
 });
 
 document.getElementById('wkResetBtn').addEventListener('click', async () => {
-  if (!confirm('Clear all tracked weekly data for both people? This cannot be undone.')) return;
-  const pw = prompt('Enter password to confirm:');
-  if (pw !== 'admin') { alert('Incorrect password.'); return; }
+  if (!confirmWipe('tracked weekly data')) return;
   wkEntries = {};
   wkWeeklyThresholds = {};
   try { localStorage.removeItem('entries'); } catch (err) {}
@@ -1271,9 +1365,15 @@ function calSaveBurn() {
 // days that have BOTH a burn entry and logged food — without both, there's nothing
 // meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
 function calDailyDeficit(person, ds) {
-  const burned = (calBurnLog[person] || {})[ds];
-  if (burned === undefined) return null;
   if (calDayItems(person, ds).length === 0) return null;
+  let burned = (calBurnLog[person] || {})[ds];
+  if (burned === undefined) {
+    // Fall back to the configured default burn so a day with food logged but a
+    // forgotten burn entry doesn't silently drop out of the deficit total.
+    const fallback = (calGoals[person] || {}).defaultBurn;
+    if (!(fallback > 0) || ds > todayStr()) return null;
+    burned = fallback;
+  }
   return burned - calDayTotals(person, ds).calories;
 }
 
@@ -1707,6 +1807,7 @@ function calPopulateGoalsInputs() {
   document.getElementById('p1ProtGoal').value = calGoals.p1.protein;
   document.getElementById('p2CalGoal').value = calGoals.p2.calories;
   document.getElementById('p2ProtGoal').value = calGoals.p2.protein;
+  document.getElementById('p1DefaultBurn').value = calGoals.p1.defaultBurn || 0;
   // These labels used to read the same generic "Calorie goal (max, kcal)" text for both
   // people with nothing to tell the two rows apart beyond position in the layout — prefix
   // with the actual name so it's unambiguous which row is whose.
@@ -1714,6 +1815,7 @@ function calPopulateGoalsInputs() {
   document.getElementById('p1ProtLabel').textContent = sharedSettings.p1 + ' — Protein goal (min, g)';
   document.getElementById('p2CalLabel').textContent = sharedSettings.p2 + ' — Calorie goal (max, kcal)';
   document.getElementById('p2ProtLabel').textContent = sharedSettings.p2 + ' — Protein goal (min, g)';
+  document.getElementById('p1BurnLabel').textContent = sharedSettings.p1 + ' — Default daily burn (kcal), used for deficit days with food logged but no burn entry (0 = off)';
 }
 
 async function calSaveGoals() {
@@ -1731,7 +1833,8 @@ async function calSaveGoals() {
   calGoals = {
     p1: {
       calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
-      protein: parseInt(document.getElementById('p1ProtGoal').value) || 0
+      protein: parseInt(document.getElementById('p1ProtGoal').value) || 0,
+      defaultBurn: parseInt(document.getElementById('p1DefaultBurn').value) || 0
     },
     p2: {
       calories: parseInt(document.getElementById('p2CalGoal').value) || 0,
@@ -2012,7 +2115,14 @@ function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, 
 
 async function calAddItem() {
   const name = document.getElementById('foodSearchInput').value.trim();
-  if (!name) { alert('Enter a food name.'); return; }
+  if (!name) {
+    document.getElementById('foodSearchInput').classList.add('input-error');
+    document.getElementById('foodNameError').style.display = '';
+    document.getElementById('foodSearchInput').focus();
+    return;
+  }
+  document.getElementById('foodSearchInput').classList.remove('input-error');
+  document.getElementById('foodNameError').style.display = 'none';
   const nameEn = name.split('/')[0].trim();
   const unit = document.getElementById('foodUnit').value;
   const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
@@ -2609,6 +2719,10 @@ document.getElementById('burnDate').addEventListener('change', calRenderBurnCard
 document.getElementById('burnSaveBtn').addEventListener('click', calSaveBurn);
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
+document.getElementById('foodSearchInput').addEventListener('input', () => {
+  document.getElementById('foodSearchInput').classList.remove('input-error');
+  document.getElementById('foodNameError').style.display = 'none';
+});
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
 document.getElementById('foodGrams').addEventListener('input', calOnGramsFieldInput);
 document.getElementById('foodUnit').addEventListener('change', calOnUnitChange);
@@ -2617,7 +2731,7 @@ document.getElementById('addItemBtn').addEventListener('click', calAddItem);
 document.getElementById('cancelEditBtn').addEventListener('click', calClearManualFields);
 document.getElementById('calDatePicker').addEventListener('change', calRenderLogCard);
 
-['p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal'].forEach(id => {
+['p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal','p1DefaultBurn'].forEach(id => {
   document.getElementById(id).addEventListener('change', calSaveGoals);
 });
 
@@ -2650,8 +2764,17 @@ document.getElementById('foodBankToggle').addEventListener('click', () => {
   setFoodBankCollapsed(!document.getElementById('foodBankBody').classList.contains('collapsed'));
 });
 
+function setCalGoalsCollapsed(collapsed) {
+  document.getElementById('calGoalsBody').classList.toggle('collapsed', collapsed);
+  document.getElementById('calGoalsArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+  try { localStorage.setItem('calGoalsCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+}
+document.getElementById('calGoalsToggle').addEventListener('click', () => {
+  setCalGoalsCollapsed(!document.getElementById('calGoalsBody').classList.contains('collapsed'));
+});
+
 document.getElementById('calResetBtn').addEventListener('click', async () => {
-  if (!confirm('Clear all logged food for both people? This cannot be undone.')) return;
+  if (!confirmWipe('logged food')) return;
   calEntries = {};
   try { localStorage.removeItem('calorie_entries'); } catch (err) {}
   calRenderAll();
@@ -3401,8 +3524,9 @@ function trRenderDay(day, dayKey) {
       <input type="date" id="logDate">
     </div>
     <div id="logWeights">
-      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><span class="lw-last" id="lwLast_${i}"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
+      ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${ex[0]}</span><span class="lw-last" id="lwLast_${i}" data-target="logW_${i}" title="Tap to use this weight"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
     </div>
+    <p id="logError" class="field-error" style="display:none;">Enter at least one weight.</p>
     <button class="primary" id="saveLogBtn">Save log</button>
 
     <div class="section-title" style="margin-top:20px;">Past sessions</div>
@@ -3480,7 +3604,12 @@ function trLoadLogIntoForm(dayKey, list, variant) {
     if (!input) return;
     input.value = existing && existing.weights[ex[0]] !== undefined ? existing.weights[ex[0]] : '';
     const hint = document.getElementById('lwLast_' + i);
-    if (hint) hint.textContent = prev && prev.weights[ex[0]] !== undefined ? `last: ${prev.weights[ex[0]]}kg` : '';
+    if (hint) {
+      const prevW = prev && prev.weights[ex[0]] !== undefined ? prev.weights[ex[0]] : null;
+      hint.textContent = prevW !== null ? `last: ${prevW}kg` : '';
+      hint.classList.toggle('has-val', prevW !== null);
+      if (prevW !== null) hint.dataset.val = prevW; else delete hint.dataset.val;
+    }
   });
 }
 
@@ -3491,7 +3620,11 @@ function trSaveLog(dayKey, list, variant) {
     const v = parseFloat(document.getElementById('logW_' + i).value);
     if (!isNaN(v)) weights[ex[0]] = v;
   });
-  if (Object.keys(weights).length === 0) { alert('Enter at least one weight.'); return; }
+  if (Object.keys(weights).length === 0) {
+    const errEl = document.getElementById('logError');
+    if (errEl) errEl.style.display = '';
+    return;
+  }
   if (!trTrainingLog[trActivePerson]) trTrainingLog[trActivePerson] = [];
   const arr = trTrainingLog[trActivePerson];
   const idx = arr.findIndex(l => l.day === dayKey && l.date === date && l.variant === variant);
@@ -3700,6 +3833,23 @@ function trRenderContent() {
     const saveBtn = document.getElementById('saveLogBtn');
     if (saveBtn) saveBtn.addEventListener('click', () => trSaveLog(trActiveDay, list, trActiveVariant));
 
+    // Tapping a "last: Xkg" hint copies that weight into the input — repeating last
+    // session's weight is the most common case, so make it one tap instead of typing.
+    document.querySelectorAll('#trContent .lw-last').forEach(hint => {
+      hint.addEventListener('click', () => {
+        if (hint.dataset.val === undefined) return;
+        const input = document.getElementById(hint.dataset.target);
+        if (input) input.value = hint.dataset.val;
+        const errEl = document.getElementById('logError');
+        if (errEl) errEl.style.display = 'none';
+      });
+    });
+    const weightsWrap = document.getElementById('logWeights');
+    if (weightsWrap) weightsWrap.addEventListener('input', () => {
+      const errEl = document.getElementById('logError');
+      if (errEl) errEl.style.display = 'none';
+    });
+
     const progressSelect = document.getElementById('trProgressExercise');
     if (progressSelect) {
       progressSelect.addEventListener('change', trRenderProgressChart);
@@ -3826,7 +3976,14 @@ trSubscribeToCloud(coupleCode);
 
 let initialSetupCollapsed = true;
 try { initialSetupCollapsed = localStorage.getItem('setupCollapsed') !== '0'; } catch (err) {}
+// First run (or sync code removed): keep Setup open so the "not syncing" hint is
+// actually visible — collapsed, a new user never learns they're running local-only.
+if (!coupleCode) initialSetupCollapsed = false;
 setSetupCollapsed(initialSetupCollapsed);
+
+let initialCalGoalsCollapsed = true;
+try { initialCalGoalsCollapsed = localStorage.getItem('calGoalsCollapsed') !== '0'; } catch (err) {}
+setCalGoalsCollapsed(initialCalGoalsCollapsed);
 
 let initialWkThresholdsCollapsed = true;
 try { initialWkThresholdsCollapsed = localStorage.getItem('wkThresholdsCollapsed') !== '0'; } catch (err) {}
@@ -3847,7 +4004,14 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
   });
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data === 'update-available') document.getElementById('updateToast').classList.add('show');
+  });
 }
+document.getElementById('updateReloadBtn').addEventListener('click', () => location.reload());
+document.getElementById('updateDismissBtn').addEventListener('click', () => {
+  document.getElementById('updateToast').classList.remove('show');
+});
 </script>
 </body>
 </html>

@@ -18,10 +18,24 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
+  // Stale-while-revalidate means a deploy only shows up one load late — so when the
+  // background revalidation of the app shell fetches a changed copy (etag differs),
+  // tell the open pages so they can offer a one-tap refresh instead of silently
+  // running the previous version.
+  const isShell = event.request.mode === 'navigate' || url.pathname.endsWith('/index.html');
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(networkResponse => {
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
+        const putDone = caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
+        if (isShell && cached) {
+          const oldTag = cached.headers.get('etag') || cached.headers.get('last-modified');
+          const newTag = networkResponse.headers.get('etag') || networkResponse.headers.get('last-modified');
+          if (oldTag && newTag && oldTag !== newTag) {
+            putDone
+              .then(() => self.clients.matchAll({ type: 'window' }))
+              .then(clients => clients.forEach(c => c.postMessage('update-available')));
+          }
+        }
         return networkResponse;
       }).catch(() => cached);
       return cached || fetchPromise;
