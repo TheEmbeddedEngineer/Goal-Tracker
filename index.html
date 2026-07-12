@@ -65,7 +65,7 @@
   .settings-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .settings-row > div { flex:1; min-width:120px; }
   .settings-row label { font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px; }
-  .settings-row input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
+  .settings-row input, .settings-row select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:14px; }
   .cat-threshold-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .cat-threshold-row .catlabel { flex:1; font-size:13px; }
   .cat-threshold-row input { width:56px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; text-align:center; }
@@ -313,6 +313,15 @@
       </div>
       <div class="settings-row">
         <div style="flex:100%;"><label>Sync code (share this exact code with your partner)</label><input type="text" id="syncCode" placeholder="Enter a shared code"></div>
+      </div>
+      <div class="settings-row">
+        <div style="flex:100%;"><label>This phone belongs to (person shown by default on this device)</label>
+          <select id="devicePerson">
+            <option value="">— not set —</option>
+            <option value="p1" id="devicePersonP1">Person 1</option>
+            <option value="p2" id="devicePersonP2">Person 2</option>
+          </select>
+        </div>
       </div>
       <p id="syncStatus" class="sync-status"></p>
       <button type="button" class="link-btn" id="exportBtn" style="padding:0;">Download backup (JSON)</button>
@@ -620,7 +629,33 @@ function markSynced() {
 function applySharedSettingsToInputs() {
   document.getElementById('p1Name').value = sharedSettings.p1;
   document.getElementById('p2Name').value = sharedSettings.p2;
+  updateDevicePersonOptions();
 }
+
+function updateDevicePersonOptions() {
+  const o1 = document.getElementById('devicePersonP1');
+  const o2 = document.getElementById('devicePersonP2');
+  if (o1 && o1.textContent !== sharedSettings.p1) o1.textContent = sharedSettings.p1;
+  if (o2 && o2.textContent !== sharedSettings.p2) o2.textContent = sharedSettings.p2;
+}
+
+document.getElementById('devicePerson').addEventListener('change', () => {
+  const v = document.getElementById('devicePerson').value;
+  try {
+    if (v) localStorage.setItem('devicePerson', v); else localStorage.removeItem('devicePerson');
+  } catch (err) {}
+  if (v !== 'p1' && v !== 'p2') return;
+  // Switch all three tabs to the owner right away, same renders as the person tabs use.
+  wkActivePerson = v; saveActivePerson('wkActivePerson', v);
+  calActivePerson = v; saveActivePerson('calActivePerson', v);
+  trActivePerson = v; saveActivePerson('trActivePerson', v);
+  const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
+  if (!order.includes(trActiveDay)) trActiveDay = 'overview';
+  trActiveVariant = 'gym';
+  wkRenderPersonTabs(); wkLoadCheckboxesForDate(); wkRenderAll();
+  calRenderPersonTabs(); calRenderAll(); calRenderWeightCard(); calRenderBurnCard();
+  trRenderAll();
+});
 
 function saveSharedSettings() {
   sharedSettings.p1 = document.getElementById('p1Name').value || 'You';
@@ -760,6 +795,7 @@ function renderTodayCard() {
     btn.addEventListener('click', () => jumpToToday(btn.dataset.tab, btn.dataset.p));
   });
   renderGlanceBar();
+  updateDevicePersonOptions();
 }
 
 // Jumps from the Today card straight to the relevant tab, with that person selected and
@@ -795,7 +831,15 @@ function jumpToToday(tab, pk) {
   document.getElementById(SECTION_IDS[tab]).scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function loadDevicePerson() {
+  try { const v = localStorage.getItem('devicePerson'); return (v === 'p1' || v === 'p2') ? v : ''; } catch (err) { return ''; }
+}
 function loadActivePerson(key) {
+  // A device owner ("this phone belongs to …") wins on every fresh load, so each
+  // phone always starts on its own person; switching mid-session still works and
+  // only lasts until the next load.
+  const dev = loadDevicePerson();
+  if (dev) return dev;
   try { const v = localStorage.getItem(key); return (v === 'p1' || v === 'p2') ? v : 'p1'; } catch (err) { return 'p1'; }
 }
 function saveActivePerson(key, value) {
@@ -4053,6 +4097,7 @@ loadSharedSettings();
 loadCoupleCode();
 applySharedSettingsToInputs();
 document.getElementById('syncCode').value = coupleCode;
+document.getElementById('devicePerson').value = loadDevicePerson();
 
 wkLoadData();
 calLoadData();
