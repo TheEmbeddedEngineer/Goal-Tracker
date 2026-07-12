@@ -387,6 +387,18 @@
       <div id="weightHistory"></div>
     </div>
 
+    <div class="card" id="stepsCard">
+      <h2>Steps</h2>
+      <div class="core-log-row">
+        <input type="date" id="stepsDate">
+        <input type="number" id="stepsValue" min="0" step="1" placeholder="steps" style="width:90px; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px;">
+        <button class="primary" id="stepsSaveBtn">Save</button>
+      </div>
+      <p id="stepsLatest" style="font-size:12px; color:var(--text-muted); margin:8px 0 0;"></p>
+      <div class="weight-week-label" id="stepsWeekLabel"></div>
+      <div id="stepsHistory"></div>
+    </div>
+
     <div class="card">
       <div class="month-nav">
         <button id="prevMonthBtn">&larr;</button>
@@ -413,6 +425,7 @@
         <button data-metric="calories" class="active">Calories</button>
         <button data-metric="protein">Protein</button>
         <button data-metric="weight">Weight</button>
+        <button data-metric="steps" id="calTrendStepsTab">Steps</button>
       </div>
       <div id="calTrendChart"></div>
     </div>
@@ -538,7 +551,8 @@ function renderTodayCard() {
   const today = todayStr();
   const wkDone = pk => !!((wkEntries[pk] || {})[today]);
   const calDone = pk => calDayItems(pk, today).length > 0;
-  const trDone = pk => trLogsForDate(pk, today).length > 0 || (trCoreLog[pk] || []).includes(today);
+  const trDone = pk => trLogsForDate(pk, today).length > 0 || (trCoreLog[pk] || []).includes(today)
+    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((trExtraLog[pk] || {})[act] || []).includes(today));
   const rows = [['Weekly', wkDone], ['Calories', calDone], ['Training', trDone]];
   const pill = done => `<span class="today-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>`;
   el.innerHTML = `
@@ -982,6 +996,11 @@ let calWeightLog = { p1: {}, p2: {} };
 // Total calories burned that day (e.g. from a fitness tracker's TDEE reading) — same
 // shape and sync-safety as calWeightLog.
 let calBurnLog = { p1: {}, p2: {} };
+// Daily step count — same shape/sync-safety as calWeightLog/calBurnLog. Personal to p1
+// (requested for himself specifically), so the card only shows when viewing p1 — same
+// scoping as the deficit goal below.
+let calStepsLog = { p1: {}, p2: {} };
+const CAL_STEPS_GOAL = 10000;
 const CAL_DEFICIT_GOAL = 50000;
 const CAL_KCAL_PER_KG = CAL_DEFICIT_GOAL / 7; // the user's own stated ratio: ~50000 kcal ≈ 7kg
 let calActivePerson = loadActivePerson('calActivePerson');
@@ -1207,6 +1226,89 @@ function calSaveBurn() {
   calPushToCloud();
 }
 
+function calLatestSteps(person) {
+  const days = Object.keys(calStepsLog[person] || {}).sort();
+  if (!days.length) return null;
+  const last = days[days.length - 1];
+  return { date: last, value: calStepsLog[person][last] };
+}
+
+function calRenderStepsCard() {
+  const card = document.getElementById('stepsCard');
+  if (card) card.style.display = calActivePerson === 'p1' ? '' : 'none';
+  if (calActivePerson !== 'p1') return;
+  const dateInput = document.getElementById('stepsDate');
+  if (!dateInput.value) dateInput.value = todayStr();
+  dateInput.max = todayStr();
+  const ds = dateInput.value;
+  const existing = (calStepsLog[calActivePerson] || {})[ds];
+  document.getElementById('stepsValue').value = existing !== undefined ? existing : '';
+  const latest = calLatestSteps(calActivePerson);
+  document.getElementById('stepsLatest').textContent = latest
+    ? `Latest: ${latest.value.toLocaleString()} steps on ${latest.date} (goal: ${CAL_STEPS_GOAL.toLocaleString()})`
+    : `No steps logged yet. Goal: ${CAL_STEPS_GOAL.toLocaleString()}/day.`;
+  calRenderStepsHistory();
+}
+
+// Same week-scoped pattern as the weight/burn history: only the Mon-Sun week containing
+// the selected date, only days that actually have an entry.
+function calRenderStepsHistory() {
+  const el = document.getElementById('stepsHistory');
+  if (!el) return;
+  const selectedDate = document.getElementById('stepsDate').value || todayStr();
+  const monday = getMonday(parseDate(selectedDate));
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  const label = document.getElementById('stepsWeekLabel');
+
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    rows.push(dstr(d));
+  }
+  const loggedDays = rows.filter(ds => (calStepsLog[calActivePerson] || {})[ds] !== undefined);
+  if (loggedDays.length === 0) {
+    if (label) label.textContent = '';
+    el.innerHTML = '';
+    return;
+  }
+  if (label) label.textContent = `Week of ${dstr(monday)} – ${dstr(sunday)}`;
+  el.innerHTML = loggedDays.map(ds => {
+    const val = calStepsLog[calActivePerson][ds];
+    return `
+    <div class="food-item">
+      <span class="fi-name">${ds}</span>
+      <span class="fi-macros">${val.toLocaleString()} steps${val >= CAL_STEPS_GOAL ? ' &#10003;' : ''}</span>
+      <button class="fi-edit" data-date="${ds}" title="Load into form">&#9998;</button><button class="fi-del" data-date="${ds}" title="Delete">&times;</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.fi-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('stepsDate').value = btn.dataset.date;
+      calRenderStepsCard();
+    });
+  });
+  el.querySelectorAll('.fi-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(`Delete the steps entry for ${btn.dataset.date}?`)) return;
+      delete calStepsLog[calActivePerson][btn.dataset.date];
+      try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
+      calRenderStepsCard();
+      calPushToCloud();
+    });
+  });
+}
+
+function calSaveSteps() {
+  const ds = document.getElementById('stepsDate').value || todayStr();
+  const val = Math.round(parseFloat(document.getElementById('stepsValue').value));
+  if (isNaN(val) || val <= 0) { alert('Enter a valid step count.'); return; }
+  if (!calStepsLog[calActivePerson]) calStepsLog[calActivePerson] = {};
+  calStepsLog[calActivePerson][ds] = val;
+  try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
+  calRenderStepsCard();
+  calPushToCloud();
+}
+
 // Deficit = calories burned (total daily expenditure) - calories eaten. Only counted for
 // days that have BOTH a burn entry and logged food — without both, there's nothing
 // meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
@@ -1369,6 +1471,7 @@ function calApplyRemoteData(data) {
   calFoodBank = data.foodBank || [];
   calWeightLog = data.weightLog || { p1: {}, p2: {} };
   calBurnLog = data.burnLog || { p1: {}, p2: {} };
+  calStepsLog = data.stepsLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   calPopulateGoalsInputs();
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: calGoals })); } catch (err) {}
@@ -1376,11 +1479,13 @@ function calApplyRemoteData(data) {
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
   try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
+  try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
   calRefreshTopFoodsCache();
   calRenderPersonTabs();
   calRenderAll();
   calRenderWeightCard();
   calRenderBurnCard();
+  calRenderStepsCard();
   calApplyingRemote = false;
   calApplyLegacyFixes();
   if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);
@@ -1527,7 +1632,8 @@ async function calPushToCloud(opts = {}) {
       dailyGoals: calDailyGoals,
       foodBank: calFoodBank,
       weightLog: calWeightLog,
-      burnLog: calBurnLog
+      burnLog: calBurnLog,
+      stepsLog: calStepsLog
     };
     // One-time cleanup: the old schema kept every food log entry ever logged inside this
     // same document, which is what drove it toward Firestore's 1 MiB limit in the first
@@ -1538,6 +1644,7 @@ async function calPushToCloud(opts = {}) {
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {}
     try { localStorage.setItem('calorie_weightLog', JSON.stringify(calWeightLog)); } catch (err) {}
     try { localStorage.setItem('calorie_burnLog', JSON.stringify(calBurnLog)); } catch (err) {}
+    try { localStorage.setItem('calorie_stepsLog', JSON.stringify(calStepsLog)); } catch (err) {}
     calRenderLogCard();
     calRenderMonth();
     calRenderTrendChart();
@@ -1643,6 +1750,7 @@ function calRenderPersonTabs() {
       calRenderLogCard();
       calRenderWeightCard();
       calRenderBurnCard();
+      calRenderStepsCard();
       calRenderTrendChart();
     });
   });
@@ -2171,6 +2279,7 @@ function calRenderMonth() {
       calRenderTrendChart();
       calRenderWeightCard();
       calRenderBurnCard();
+      calRenderStepsCard();
       document.getElementById('foodItemsList').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
@@ -2187,6 +2296,8 @@ function calTrendPoints(person, metric, days) {
     let value;
     if (metric === 'weight') {
       value = (calWeightLog[person] || {})[ds];
+    } else if (metric === 'steps') {
+      value = (calStepsLog[person] || {})[ds];
     } else if (calDayItems(person, ds).length > 0) {
       value = calDayTotals(person, ds)[metric];
     }
@@ -2247,11 +2358,19 @@ function buildTrendChart(points, opts) {
 function calRenderTrendChart() {
   const el = document.getElementById('calTrendChart');
   if (!el) return;
+  // Steps was only requested for p1 — hide that tab for p2, and fall back off it if it
+  // was left selected from switching away from p1.
+  const stepsTab = document.getElementById('calTrendStepsTab');
+  if (stepsTab) stepsTab.style.display = calActivePerson === 'p1' ? '' : 'none';
+  if (calActivePerson !== 'p1' && calTrendMetric === 'steps') {
+    calTrendMetric = 'calories';
+    document.querySelectorAll('#calTrendTabs button').forEach(b => b.classList.toggle('active', b.dataset.metric === 'calories'));
+  }
   const metric = calTrendMetric;
   const points = calTrendPoints(calActivePerson, metric, 30);
   const personGoals = calGoals[calActivePerson] || {};
-  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : null;
-  const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : 'kg';
+  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : metric === 'steps' ? CAL_STEPS_GOAL : null;
+  const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : metric === 'steps' ? '' : 'kg';
   el.innerHTML = buildTrendChart(points, { color: '--' + calActivePerson, goal, unit, detailId: 'calTrendDetail' });
   el.querySelectorAll('.trend-dot').forEach(dot => {
     dot.addEventListener('click', () => {
@@ -2327,6 +2446,11 @@ function calLoadData() {
     calBurnLog.p1 = calBurnLog.p1 || {};
     calBurnLog.p2 = calBurnLog.p2 || {};
   } catch (err) { calBurnLog = { p1: {}, p2: {} }; }
+  try {
+    calStepsLog = JSON.parse(localStorage.getItem('calorie_stepsLog') || '{}');
+    calStepsLog.p1 = calStepsLog.p1 || {};
+    calStepsLog.p2 = calStepsLog.p2 || {};
+  } catch (err) { calStepsLog = { p1: {}, p2: {} }; }
 
   calPopulateCategorySelect();
   calPopulateGoalsInputs();
@@ -2334,6 +2458,7 @@ function calLoadData() {
   document.getElementById('calDatePicker').max = todayStr();
   document.getElementById('weightDate').value = todayStr();
   document.getElementById('burnDate').value = todayStr();
+  document.getElementById('stepsDate').value = todayStr();
 
   const now = new Date();
   calViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -2343,6 +2468,7 @@ function calLoadData() {
   calRenderAll();
   calRenderWeightCard();
   calRenderBurnCard();
+  calRenderStepsCard();
   calApplyLegacyFixes();
 }
 
@@ -2350,6 +2476,8 @@ document.getElementById('weightDate').addEventListener('change', calRenderWeight
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
 document.getElementById('burnDate').addEventListener('change', calRenderBurnCard);
 document.getElementById('burnSaveBtn').addEventListener('click', calSaveBurn);
+document.getElementById('stepsDate').addEventListener('change', calRenderStepsCard);
+document.getElementById('stepsSaveBtn').addEventListener('click', calSaveSteps);
 
 document.getElementById('foodSearchInput').addEventListener('input', calOnFoodNameInput);
 document.getElementById('foodSearchInput').addEventListener('keydown', calOnFoodSearchKeydown);
@@ -2672,8 +2800,15 @@ let trActiveDay = 'overview';
 let trActiveVariant = 'gym';
 let trTrainingLog = { p1: [], p2: [] };
 // Dates (YYYY-MM-DD) the core stability block was done — a single checkbox per day,
-// not a per-exercise log like trTrainingLog.
+// not a per-exercise log like trTrainingLog. Doesn't count toward trWeekLogCount: it's a
+// short add-on, not a standalone session, so it shouldn't inflate the weekly session
+// total or streak the way a real workout/activity does.
 let trCoreLog = { p1: [], p2: [] };
+// Other loggable activities outside the day1-day5 plan — person -> activity name -> dates
+// (same shape/merge semantics as trCoreLog), but these DO count as real sessions since
+// they're standalone efforts, not a finisher tacked onto another workout.
+let trExtraLog = { p1: {}, p2: {} };
+const TR_EXTRA_ACTIVITIES = { p1: ['Tennis'], p2: ['Hyrox', 'Runs'] };
 let trOverviewViewedMonth = null;
 let trOverviewSelectedDate = null;
 let trUnsub = null;
@@ -2717,10 +2852,12 @@ function trApplyRemoteData(data) {
   }
   trTrainingLog = data.trainingLog || { p1: [], p2: [] };
   trCoreLog = data.coreLog || { p1: [], p2: [] };
+  trExtraLog = data.extraLog || { p1: {}, p2: {} };
   applySharedSettingsToInputs();
   try { localStorage.setItem('training_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2 })); } catch (err) {}
   try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
   try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
+  try { localStorage.setItem('training_extraLog', JSON.stringify(trExtraLog)); } catch (err) {}
   trRenderAll();
   trApplyingRemote = false;
   trApplyLegacyExerciseRenames();
@@ -2765,6 +2902,17 @@ function trMergeCoreLog(localArr, remoteArr) {
   return Array.from(new Set([...(remoteArr || []), ...(localArr || [])])).sort();
 }
 
+// Same union-by-date merge as trMergeCoreLog, applied per activity name (Tennis, Hyrox,
+// Runs, ...) since each person can have a different set of activities.
+function trMergeExtraLog(localObj, remoteObj) {
+  const merged = {};
+  const names = new Set([...Object.keys(localObj || {}), ...Object.keys(remoteObj || {})]);
+  names.forEach(name => {
+    merged[name] = trMergeCoreLog((localObj || {})[name], (remoteObj || {})[name]);
+  });
+  return merged;
+}
+
 async function trPushToCloud(opts = {}) {
   if (!coupleCode || trApplyingRemote) return;
   try {
@@ -2778,6 +2926,8 @@ async function trPushToCloud(opts = {}) {
           trTrainingLog.p2 = trMergeLogArray(trTrainingLog.p2, remote.trainingLog && remote.trainingLog.p2);
           trCoreLog.p1 = trMergeCoreLog(trCoreLog.p1, remote.coreLog && remote.coreLog.p1);
           trCoreLog.p2 = trMergeCoreLog(trCoreLog.p2, remote.coreLog && remote.coreLog.p2);
+          trExtraLog.p1 = trMergeExtraLog(trExtraLog.p1, remote.extraLog && remote.extraLog.p1);
+          trExtraLog.p2 = trMergeExtraLog(trExtraLog.p2, remote.extraLog && remote.extraLog.p2);
         }
       } catch (err) { console.error('Could not merge remote training log before push:', err); }
     }
@@ -2785,10 +2935,12 @@ async function trPushToCloud(opts = {}) {
     await setDoc(doc(db, 'training', coupleCode), {
       settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
       trainingLog: trTrainingLog,
-      coreLog: trCoreLog
+      coreLog: trCoreLog,
+      extraLog: trExtraLog
     }, writeOpts);
     try { localStorage.setItem('training_log', JSON.stringify(trTrainingLog)); } catch (err) {}
     try { localStorage.setItem('training_coreLog', JSON.stringify(trCoreLog)); } catch (err) {}
+    try { localStorage.setItem('training_extraLog', JSON.stringify(trExtraLog)); } catch (err) {}
     trRenderContent();
   } catch (err) {
     console.error(err);
@@ -2845,7 +2997,7 @@ function trRenderOverview(plan) {
     ${p1Count > 0 && p2Count > 0 ? '🎉 You\'ve both trained this week — ' : ''}sessions this week: <span style="color:var(--p1); font-weight:600;">${sharedSettings.p1} ${p1Count}</span> &middot; <span style="color:var(--p2); font-weight:600;">${sharedSettings.p2} ${p2Count}</span>
   </div>` : '';
   return `
-    ${streak > 0 ? `<div class="tr-streak-badge" title="Consecutive weeks with ${TR_STREAK_MIN_LOGS}+ workout or core-stability sessions logged">&#128293; ${streak}-week streak (${TR_STREAK_MIN_LOGS}+ sessions every week)</div>` : ''}
+    ${streak > 0 ? `<div class="tr-streak-badge" title="Consecutive weeks with ${TR_STREAK_MIN_LOGS}+ workout or other logged activity (core stability doesn't count as its own session)">&#128293; ${streak}-week streak (${TR_STREAK_MIN_LOGS}+ sessions every week)</div>` : ''}
     ${bothTrainedLine}
     <h2>Training log calendar</h2>
     <div class="month-nav">
@@ -2859,6 +3011,20 @@ function trRenderOverview(plan) {
       <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
     </div>
     <div id="trOverviewSelectedDay"></div>
+
+    ${(TR_EXTRA_ACTIVITIES[trActivePerson] || []).length ? `
+      <div class="section-title">Other activities</div>
+      ${TR_EXTRA_ACTIVITIES[trActivePerson].map(act => `
+        <div class="core-log-row">
+          <label class="core-check-inline">
+            <input type="checkbox" class="extra-activity-checkbox" data-activity="${act}">
+            <span>${act}</span>
+          </label>
+          <input type="date" class="extra-activity-date" data-activity="${act}">
+          <button class="primary extra-activity-save" data-activity="${act}">Save</button>
+        </div>
+      `).join('')}
+    ` : ''}
 
     <h2 style="margin-top:20px;">Overview</h2>
     <p class="card-sub">${plan.goal}</p>
@@ -2880,18 +3046,23 @@ function trLogsForDate(person, dateStr) {
 
 const TR_STREAK_MIN_LOGS = 4;
 
+// Core stability is intentionally excluded here — it's a short add-on, not a standalone
+// session, so it shouldn't inflate the weekly count or streak. Other logged activities
+// (Tennis, Hyrox, Runs, ...) DO count since they're real standalone efforts.
 function trWeekLogCount(person, weekMonday) {
   const start = dstr(weekMonday);
   const sunday = new Date(weekMonday); sunday.setDate(sunday.getDate() + 6);
   const end = dstr(sunday);
   const workoutCount = (trTrainingLog[person] || []).filter(l => l.date >= start && l.date <= end).length;
-  const coreCount = (trCoreLog[person] || []).filter(ds => ds >= start && ds <= end).length;
-  return workoutCount + coreCount;
+  const extraCount = Object.values(trExtraLog[person] || {})
+    .reduce((sum, dates) => sum + dates.filter(ds => ds >= start && ds <= end).length, 0);
+  return workoutCount + extraCount;
 }
 
 // Consecutive weeks (including the current in-progress one, since training is a flexible
 // rotation rather than a daily habit) with at least TR_STREAK_MIN_LOGS total sessions
-// (workouts + core-stability check-ins combined).
+// (workouts + other logged activities combined — see trWeekLogCount for why core doesn't
+// count here).
 function trCurrentStreak(person) {
   let monday = getMonday(new Date());
   let streak = 0;
@@ -2933,13 +3104,14 @@ function trRenderOverviewCalendarGrid() {
     const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     const logs = trLogsForDate(trActivePerson, ds);
     const coreDone = (trCoreLog[trActivePerson] || []).includes(ds);
-    const hasAny = logs.length > 0 || coreDone;
+    const extraDone = (TR_EXTRA_ACTIVITIES[trActivePerson] || []).filter(act => ((trExtraLog[trActivePerson] || {})[act] || []).includes(ds));
+    const hasAny = logs.length > 0 || coreDone || extraDone.length > 0;
     const status = hasAny ? 'good' : '';
     const selected = trOverviewSelectedDate === ds ? ' selected' : '';
-    const titleParts = logs.map(trDayVariantLabel);
+    const titleParts = logs.map(trDayVariantLabel).concat(extraDone);
     if (coreDone) titleParts.push('Core stability');
     const title = hasAny ? ds + ': ' + titleParts.join(', ') : ds + ': not logged';
-    const labelParts = logs.map(trDayShortLabel);
+    const labelParts = logs.map(trDayShortLabel).concat(extraDone.map(act => act[0]));
     if (coreDone) labelParts.push('C');
     const label = labelParts.join('/');
     return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}">${label}</div>`;
@@ -2962,7 +3134,8 @@ function trRenderOverviewSelectedDay() {
   }
   const logs = trLogsForDate(trActivePerson, trOverviewSelectedDate);
   const coreDone = (trCoreLog[trActivePerson] || []).includes(trOverviewSelectedDate);
-  if (logs.length === 0 && !coreDone) {
+  const extraDone = (TR_EXTRA_ACTIVITIES[trActivePerson] || []).filter(act => ((trExtraLog[trActivePerson] || {})[act] || []).includes(trOverviewSelectedDate));
+  if (logs.length === 0 && !coreDone && extraDone.length === 0) {
     el.innerHTML = `<div class="empty-state" style="padding:0.5rem 0;">No training logged on ${trOverviewSelectedDate}.</div>`;
     return;
   }
@@ -2972,7 +3145,13 @@ function trRenderOverviewSelectedDay() {
       <span class="pl-meta">Core stability block</span>
     </div>
   </div>` : '';
-  el.innerHTML = coreHtml + logs.map(l => {
+  const extraHtml = extraDone.map(act => `<div class="past-log-row" style="margin-bottom:8px;">
+    <div class="pl-header" style="cursor:default;">
+      <span class="pl-date">${trOverviewSelectedDate}</span>
+      <span class="pl-meta">${act}</span>
+    </div>
+  </div>`).join('');
+  el.innerHTML = coreHtml + extraHtml + logs.map(l => {
     const prev = trFindPreviousLog(trActivePerson, l.day, l.variant, l.date);
     return `<div class="past-log-row" style="margin-bottom:8px;">
       <div class="pl-header" style="cursor:default;">
@@ -3171,6 +3350,36 @@ function trSaveCoreLog() {
   trPushToCloud({ skipMerge: !checked });
 }
 
+// Same pattern as trCoreLogDate/trLoadCoreCheckboxForDate/trSaveCoreLog, generalized to
+// however many extra activities the active person has (see TR_EXTRA_ACTIVITIES).
+let trExtraLogDates = {};
+
+function trLoadExtraActivityCheckbox(activity) {
+  const dateInput = document.querySelector(`.extra-activity-date[data-activity="${activity}"]`);
+  const checkbox = document.querySelector(`.extra-activity-checkbox[data-activity="${activity}"]`);
+  if (!dateInput || !checkbox) return;
+  trExtraLogDates[activity] = dateInput.value;
+  checkbox.checked = ((trExtraLog[trActivePerson] || {})[activity] || []).includes(dateInput.value);
+}
+
+function trSaveExtraActivity(activity) {
+  const dateInput = document.querySelector(`.extra-activity-date[data-activity="${activity}"]`);
+  const checkbox = document.querySelector(`.extra-activity-checkbox[data-activity="${activity}"]`);
+  if (!dateInput || !checkbox) return;
+  const ds = dateInput.value || todayStr();
+  const checked = checkbox.checked;
+  trExtraLogDates[activity] = ds;
+  if (!trExtraLog[trActivePerson]) trExtraLog[trActivePerson] = {};
+  const arr = trExtraLog[trActivePerson][activity] || (trExtraLog[trActivePerson][activity] = []);
+  const idx = arr.indexOf(ds);
+  const wasPresent = idx >= 0;
+  if (checked && !wasPresent) arr.push(ds);
+  else if (!checked && wasPresent) arr.splice(idx, 1);
+  else return;
+  try { localStorage.setItem('training_extraLog', JSON.stringify(trExtraLog)); } catch (err) {}
+  trPushToCloud({ skipMerge: !checked });
+}
+
 function trRenderBackCare(bc) {
   return `
     <h2>Back care</h2>
@@ -3218,6 +3427,17 @@ function trRenderContent() {
     });
     trRenderOverviewCalendarGrid();
     trRenderOverviewSelectedDay();
+    (TR_EXTRA_ACTIVITIES[trActivePerson] || []).forEach(act => {
+      const dateInput = document.querySelector(`.extra-activity-date[data-activity="${act}"]`);
+      if (dateInput) {
+        dateInput.max = todayStr();
+        dateInput.value = trExtraLogDates[act] || todayStr();
+        dateInput.addEventListener('change', () => trLoadExtraActivityCheckbox(act));
+      }
+      trLoadExtraActivityCheckbox(act);
+      const saveBtn = document.querySelector(`.extra-activity-save[data-activity="${act}"]`);
+      if (saveBtn) saveBtn.addEventListener('click', () => trSaveExtraActivity(act));
+    });
   } else if (trActiveDay === 'backcare') {
     contentEl.innerHTML = trRenderBackCare(plan.backcare);
     const coreDateInput = document.getElementById('coreLogDate');
@@ -3308,6 +3528,11 @@ function trLoadData() {
     trCoreLog.p1 = trCoreLog.p1 || [];
     trCoreLog.p2 = trCoreLog.p2 || [];
   } catch (err) { trCoreLog = { p1: [], p2: [] }; }
+  try {
+    trExtraLog = JSON.parse(localStorage.getItem('training_extraLog') || '{}');
+    trExtraLog.p1 = trExtraLog.p1 || {};
+    trExtraLog.p2 = trExtraLog.p2 || {};
+  } catch (err) { trExtraLog = { p1: {}, p2: {} }; }
 
   const now = new Date();
   trOverviewViewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
