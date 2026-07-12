@@ -539,7 +539,8 @@ function renderTodayCard() {
   const wkDone = pk => !!((wkEntries[pk] || {})[today]);
   const calDone = pk => calDayItems(pk, today).length > 0;
   const trDone = pk => trLogsForDate(pk, today).length > 0 || (trCoreLog[pk] || []).includes(today)
-    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((trExtraLog[pk] || {})[act] || []).includes(today));
+    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((trExtraLog[pk] || {})[act] || []).includes(today))
+    || (pk === 'p1' && (trStepsCheckLog.p1 || []).includes(today));
   const rows = [['Weekly', wkDone], ['Calories', calDone], ['Training', trDone]];
   const pill = done => `<span class="today-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>`;
   el.innerHTML = `
@@ -3000,14 +3001,17 @@ function trRenderOverviewCalendarGrid() {
     const logs = trLogsForDate(trActivePerson, ds);
     const coreDone = (trCoreLog[trActivePerson] || []).includes(ds);
     const extraDone = (TR_EXTRA_ACTIVITIES[trActivePerson] || []).filter(act => ((trExtraLog[trActivePerson] || {})[act] || []).includes(ds));
-    const hasAny = logs.length > 0 || coreDone || extraDone.length > 0;
+    const stepsDone = trActivePerson === 'p1' && (trStepsCheckLog.p1 || []).includes(ds);
+    const hasAny = logs.length > 0 || coreDone || extraDone.length > 0 || stepsDone;
     const status = hasAny ? 'good' : '';
     const selected = trOverviewSelectedDate === ds ? ' selected' : '';
     const titleParts = logs.map(trDayVariantLabel).concat(extraDone);
     if (coreDone) titleParts.push('Core stability');
+    if (stepsDone) titleParts.push(`${TR_STEPS_GOAL.toLocaleString()}+ steps`);
     const title = hasAny ? ds + ': ' + titleParts.join(', ') : ds + ': not logged';
     const labelParts = logs.map(trDayShortLabel).concat(extraDone.map(act => act[0]));
     if (coreDone) labelParts.push('C');
+    if (stepsDone) labelParts.push('S');
     const label = labelParts.join('/');
     return `<div class="month-day ${status}${selected}" data-date="${ds}" title="${title}">${label}</div>`;
   }).join('');
@@ -3030,7 +3034,8 @@ function trRenderOverviewSelectedDay() {
   const logs = trLogsForDate(trActivePerson, trOverviewSelectedDate);
   const coreDone = (trCoreLog[trActivePerson] || []).includes(trOverviewSelectedDate);
   const extraDone = (TR_EXTRA_ACTIVITIES[trActivePerson] || []).filter(act => ((trExtraLog[trActivePerson] || {})[act] || []).includes(trOverviewSelectedDate));
-  if (logs.length === 0 && !coreDone && extraDone.length === 0) {
+  const stepsDone = trActivePerson === 'p1' && (trStepsCheckLog.p1 || []).includes(trOverviewSelectedDate);
+  if (logs.length === 0 && !coreDone && extraDone.length === 0 && !stepsDone) {
     el.innerHTML = `<div class="empty-state" style="padding:0.5rem 0;">No training logged on ${trOverviewSelectedDate}.</div>`;
     return;
   }
@@ -3040,13 +3045,19 @@ function trRenderOverviewSelectedDay() {
       <span class="pl-meta">Core stability block</span>
     </div>
   </div>` : '';
+  const stepsHtml = stepsDone ? `<div class="past-log-row" style="margin-bottom:8px;">
+    <div class="pl-header" style="cursor:default;">
+      <span class="pl-date">${trOverviewSelectedDate}</span>
+      <span class="pl-meta">${TR_STEPS_GOAL.toLocaleString()}+ steps</span>
+    </div>
+  </div>` : '';
   const extraHtml = extraDone.map(act => `<div class="past-log-row" style="margin-bottom:8px;">
     <div class="pl-header" style="cursor:default;">
       <span class="pl-date">${trOverviewSelectedDate}</span>
       <span class="pl-meta">${act}</span>
     </div>
   </div>`).join('');
-  el.innerHTML = coreHtml + extraHtml + logs.map(l => {
+  el.innerHTML = coreHtml + stepsHtml + extraHtml + logs.map(l => {
     const prev = trFindPreviousLog(trActivePerson, l.day, l.variant, l.date);
     return `<div class="past-log-row" style="margin-bottom:8px;">
       <div class="pl-header" style="cursor:default;">
