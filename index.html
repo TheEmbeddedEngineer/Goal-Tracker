@@ -1357,7 +1357,6 @@ const CAL_LEGACY_FIXES = {
   'Magerquark': { category: 'Dairy', en: 'Low-fat quark' },
   'Joghurt 2%': { category: 'Dairy', en: 'Yogurt (2%)' },
   'Bier': { category: 'Snacks & Drinks', en: 'Beer' },
-  'Heidelberren': { category: 'Fruits', en: 'Blueberries', de: 'Heidelbeeren' },
   'Apple': { category: 'Fruits', de: 'Apfel' },
   'Brezel': { category: 'Snacks & Drinks' },
   'Nektarine': { category: 'Fruits' },
@@ -1385,32 +1384,62 @@ const CAL_LEGACY_FIXES = {
   'Whey': { category: 'Protein Supplements' }
 };
 
-// Ad-hoc English-name corrections for entries that already have a category (so they
-// wouldn't be touched by CAL_LEGACY_FIXES above). Keyed by the current "de" name.
+// Ad-hoc name corrections for entries that already have a category (so they wouldn't be
+// touched by CAL_LEGACY_FIXES above, which only fires for uncategorized entries). Keyed
+// by the entry's current "de" name; each value may correct "en", "de", or both — e.g. a
+// name that was really just the other language's word copied into both fields, a
+// misspelling, or a capitalization mismatch with the rest of the bank. Self-deactivating:
+// once applied, the entry's "de" no longer matches the old key, so re-running is a no-op.
 const CAL_NAME_FIXES = {
-  'Gervais Hüttenkäse 0.9%': 'Gervais cottage cheese 0.9%',
-  'Hüttenkäse 4%': 'Cottage cheese 4%'
+  'Gervais Hüttenkäse 0.9%': { en: 'Gervais cottage cheese 0.9%' },
+  'Hüttenkäse 4%': { en: 'Cottage cheese 4%' },
+  'Cappucino': { en: 'Cappuccino', de: 'Cappuccino' },
+  'latte macchiato': { en: 'Latte macchiato', de: 'Latte macchiato' },
+  'Sojabohnenkerne Rewe': { en: 'Soybean kernels (Rewe)' },
+  'Orzo Salat': { en: 'Orzo salad' },
+  'Orzo Hähnchensalat': { en: 'Orzo chicken salad' },
+  'Gummibärchen': { en: 'Gummy bears' },
+  'Vollkorn Wraps': { en: 'Whole grain wraps' },
+  'CremeQuark': { en: 'Cream quark', de: 'Cremequark' },
+  'Basmati rice (cooked)': { de: 'Basmatireis (gekocht)' },
+  'Wein': { en: 'Wine' },
+  'djudje kebab': { en: 'Djudje kebab', de: 'Djudje kebab' }
 };
 
 function calApplyLegacyFixes() {
   let bankChanged = false;
+  // calMergeFoodBank unions entries by "de" — changing an entry's "de" in place is really
+  // a delete-under-the-old-key + add-under-the-new-key. A normal merge-before-push can't
+  // tell that apart from "a new entry was added elsewhere," so it'd leave the untouched
+  // remote copy sitting under the old key as a duplicate. Track it so the push below can
+  // skip the merge, the same way a bank-entry delete or rename already has to.
+  let bankDeKeyChanged = false;
   const entriesChangedDates = [];
   calFoodBank.forEach(entry => {
     if (entry.category) return;
     const fix = CAL_LEGACY_FIXES[entry.de] || CAL_LEGACY_FIXES[entry.en];
     entry.category = fix ? fix.category : 'Other';
     if (fix && fix.en) entry.en = fix.en;
-    if (fix && fix.de) entry.de = fix.de;
+    if (fix && fix.de && fix.de !== entry.de) { entry.de = fix.de; bankDeKeyChanged = true; }
     bankChanged = true;
   });
 
   calFoodBank.forEach(entry => {
-    const fixedEn = CAL_NAME_FIXES[entry.de];
-    if (fixedEn && entry.en !== fixedEn) {
-      entry.en = fixedEn;
-      bankChanged = true;
-    }
+    const fix = CAL_NAME_FIXES[entry.de];
+    if (!fix) return;
+    if (fix.en && entry.en !== fix.en) { entry.en = fix.en; bankChanged = true; }
+    if (fix.de && entry.de !== fix.de) { entry.de = fix.de; bankChanged = true; bankDeKeyChanged = true; }
   });
+
+  // One-time dedup: an old typo ("Heidelberren") created a duplicate of the already-
+  // correct "Blueberries / Heidelbeeren" entry with identical reference values. Drop the
+  // misspelled duplicate outright instead of renaming it, since renaming it would collide
+  // with the entry that already exists under the correct name.
+  const hasCorrectBlueberries = calFoodBank.some(e => e.de === 'Heidelbeeren');
+  const beforeLen = calFoodBank.length;
+  calFoodBank = calFoodBank.filter(e => !(hasCorrectBlueberries && (e.de === 'Heidelberren' || e.en === 'Heidelberren')));
+  const bankEntryDeleted = calFoodBank.length !== beforeLen;
+  if (bankEntryDeleted) bankChanged = true;
 
   // Logged days from before categories existed only have a category on the food
   // bank entry, not on the individual log item — backfill those too, so past days
@@ -1432,7 +1461,10 @@ function calApplyLegacyFixes() {
     if (bankChanged) { try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {} }
     if (entriesChangedDates.length) { try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {} }
     calRenderAll();
-    if (bankChanged) calPushToCloud();
+    // A deletion (the Heidelberren dedup) or a "de" rename needs skipMerge, same reasoning
+    // as calDeleteFoodBankEntry/calSaveFoodBankEdit — otherwise the pre-push merge would
+    // resurrect a stale remote copy under the old key alongside the fixed one.
+    if (bankChanged) calPushToCloud({ skipMerge: bankEntryDeleted || bankDeKeyChanged });
     if (entriesChangedDates.length) calPushEntriesForDates(entriesChangedDates);
   }
 }
