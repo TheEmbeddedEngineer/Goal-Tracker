@@ -1,5 +1,5 @@
-// Pure data: training plans, exercise renames, calorie categories and
-// one-off legacy data fixes. No logic, no imports.
+// Pure data: training plans, the exercise-rename table, and calorie categories.
+// No logic, no imports.
 
 
 
@@ -16,68 +16,7 @@ export const CAL_CATEGORIES = [
   'Other'
 ];
 
-// One-time, idempotent cleanup for food bank entries created before categories existed:
-// assigns a category and fixes a few names that were just the German word copied into
-// the English field (or a typo). Entries that already have a category are left alone,
-// so this only ever touches each legacy entry once.
-export const CAL_LEGACY_FIXES = {
-  'Thunfisch': { category: 'Meat, Fish & Eggs', en: 'Tuna' },
-  'Pfirsich': { category: 'Fruits', en: 'Peach' },
-  'Lachs': { category: 'Meat, Fish & Eggs', en: 'Salmon' },
-  'Zwiebeln': { category: 'Vegetables', en: 'Onions' },
-  'Salat Shirazi': { category: 'Vegetables', en: 'Shirazi salad' },
-  'TK-Beeren': { category: 'Fruits', en: 'Frozen berries' },
-  'Magerquark': { category: 'Dairy', en: 'Low-fat quark' },
-  'Joghurt 2%': { category: 'Dairy', en: 'Yogurt (2%)' },
-  'Bier': { category: 'Snacks & Drinks', en: 'Beer' },
-  'Apple': { category: 'Fruits', de: 'Apfel' },
-  'Brezel': { category: 'Snacks & Drinks' },
-  'Nektarine': { category: 'Fruits' },
-  'Ei': { category: 'Meat, Fish & Eggs' },
-  'Protein-Wrap': { category: 'Grains, Pasta & Rice' },
-  'Hüttenkäse (fettarm)': { category: 'Dairy' },
-  'Tomate': { category: 'Vegetables' },
-  'Gurke': { category: 'Vegetables' },
-  'Mandeln': { category: 'Nuts & Oils' },
-  'Walnusskerne': { category: 'Nuts & Oils' },
-  'Rohe Kartoffeln': { category: 'Grains, Pasta & Rice' },
-  'Rohe Hähnchenbrust': { category: 'Meat, Fish & Eggs' },
-  'Pflaumen': { category: 'Fruits' },
-  'Tagliatelle': { category: 'Grains, Pasta & Rice' },
-  'Rumpsteak': { category: 'Meat, Fish & Eggs' },
-  'Olivenöl': { category: 'Nuts & Oils' },
-  'Kirschen': { category: 'Fruits' },
-  'Kochcreme': { category: 'Dairy' },
-  'Butter': { category: 'Dairy' },
-  'Parmesan': { category: 'Dairy' },
-  'Wassermelone': { category: 'Fruits' },
-  'Powerade Energie-Drink': { category: 'Snacks & Drinks' },
-  'Proteinriegel': { category: 'Protein Supplements' },
-  'Penne Bolognese': { category: 'Restaurant/Canteen' },
-  'Whey': { category: 'Protein Supplements' }
-};
 
-// Ad-hoc name corrections for entries that already have a category (so they wouldn't be
-// touched by CAL_LEGACY_FIXES above, which only fires for uncategorized entries). Keyed
-// by the entry's current "de" name; each value may correct "en", "de", or both — e.g. a
-// name that was really just the other language's word copied into both fields, a
-// misspelling, or a capitalization mismatch with the rest of the bank. Self-deactivating:
-// once applied, the entry's "de" no longer matches the old key, so re-running is a no-op.
-export const CAL_NAME_FIXES = {
-  'Gervais Hüttenkäse 0.9%': { en: 'Gervais cottage cheese 0.9%' },
-  'Hüttenkäse 4%': { en: 'Cottage cheese 4%' },
-  'Cappucino': { en: 'Cappuccino', de: 'Cappuccino' },
-  'latte macchiato': { en: 'Latte macchiato', de: 'Latte macchiato' },
-  'Sojabohnenkerne Rewe': { en: 'Soybean kernels (Rewe)' },
-  'Orzo Salat': { en: 'Orzo salad' },
-  'Orzo Hähnchensalat': { en: 'Orzo chicken salad' },
-  'Gummibärchen': { en: 'Gummy bears' },
-  'Vollkorn Wraps': { en: 'Whole grain wraps' },
-  'CremeQuark': { en: 'Cream quark', de: 'Cremequark' },
-  'Basmati rice (cooked)': { de: 'Basmatireis (gekocht)' },
-  'Wein': { en: 'Wine' },
-  'djudje kebab': { en: 'Djudje kebab', de: 'Djudje kebab' }
-};
 
 
 export const DAY_ORDER = ['overview', 'day1', 'day2', 'day3', 'day4', 'day5', 'backcare'];
@@ -339,9 +278,8 @@ export const PLAN_P2 = {
 };
 export const TR_EXTRA_ACTIVITIES = { p1: ['Tennis'], p2: ['Hyrox', 'Runs'] };
 
-// One-time rename for day2's last exercise, replaced by Preacher curl — carries over any
-// already-logged weight from the old exercise name instead of leaving it orphaned.
-export const TR_EXERCISE_RENAMES = {
-  'Wrist extensor curls (elbow health)': 'Preacher curl',
-  'Dumbbell wrist extension': 'Preacher curl'
-};
+// Mechanism for renaming an exercise that already has logged weights: map old name ->
+// new name here and trApplyLegacyExerciseRenames() re-keys the logs on next load.
+// Currently empty — the 2026-07 renames were verified fully applied to the synced data
+// on 2026-07-13 and removed (see git history for the old entries).
+export const TR_EXERCISE_RENAMES = {};

@@ -6,7 +6,7 @@ import {
   calRound2, buildMonthGrid, buildTrendChart
 } from './core.js';
 import { sharedSettings, renderTodayCard, renderGlanceBar, applySharedSettingsToInputs } from './shared.js';
-import { CAL_CATEGORIES, CAL_LEGACY_FIXES, CAL_NAME_FIXES } from './data.js';
+import { CAL_CATEGORIES } from './data.js';
 
 
 function calPopulateCategorySelect() {
@@ -333,69 +333,6 @@ function calRenderDeficitCard() {
 
 function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }
 
-function calApplyLegacyFixes() {
-  let bankChanged = false;
-  // calMergeFoodBank unions entries by "de" — changing an entry's "de" in place is really
-  // a delete-under-the-old-key + add-under-the-new-key. A normal merge-before-push can't
-  // tell that apart from "a new entry was added elsewhere," so it'd leave the untouched
-  // remote copy sitting under the old key as a duplicate. Track it so the push below can
-  // skip the merge, the same way a bank-entry delete or rename already has to.
-  let bankDeKeyChanged = false;
-  const entriesChangedDates = [];
-  calFoodBank.forEach(entry => {
-    if (entry.category) return;
-    const fix = CAL_LEGACY_FIXES[entry.de] || CAL_LEGACY_FIXES[entry.en];
-    entry.category = fix ? fix.category : 'Other';
-    if (fix && fix.en) entry.en = fix.en;
-    if (fix && fix.de && fix.de !== entry.de) { entry.de = fix.de; bankDeKeyChanged = true; }
-    bankChanged = true;
-  });
-
-  calFoodBank.forEach(entry => {
-    const fix = CAL_NAME_FIXES[entry.de];
-    if (!fix) return;
-    if (fix.en && entry.en !== fix.en) { entry.en = fix.en; bankChanged = true; }
-    if (fix.de && entry.de !== fix.de) { entry.de = fix.de; bankChanged = true; bankDeKeyChanged = true; }
-  });
-
-  // One-time dedup: an old typo ("Heidelberren") created a duplicate of the already-
-  // correct "Blueberries / Heidelbeeren" entry with identical reference values. Drop the
-  // misspelled duplicate outright instead of renaming it, since renaming it would collide
-  // with the entry that already exists under the correct name.
-  const hasCorrectBlueberries = calFoodBank.some(e => e.de === 'Heidelbeeren');
-  const beforeLen = calFoodBank.length;
-  calFoodBank = calFoodBank.filter(e => !(hasCorrectBlueberries && (e.de === 'Heidelberren' || e.en === 'Heidelberren')));
-  const bankEntryDeleted = calFoodBank.length !== beforeLen;
-  if (bankEntryDeleted) bankChanged = true;
-
-  // Logged days from before categories existed only have a category on the food
-  // bank entry, not on the individual log item — backfill those too, so past days
-  // group correctly instead of dumping everything into "Other".
-  ['p1', 'p2'].forEach(pk => {
-    const personEntries = calEntries[pk] || {};
-    Object.entries(personEntries).forEach(([ds, day]) => {
-      (day.items || []).forEach(item => {
-        if (item.category) return;
-        const bankEntry = calFindInBank(item.name);
-        const fix = CAL_LEGACY_FIXES[item.name];
-        item.category = (bankEntry && bankEntry.category) || (fix && fix.category) || 'Other';
-        entriesChangedDates.push(ds);
-      });
-    });
-  });
-
-  if (bankChanged || entriesChangedDates.length) {
-    if (bankChanged) { try { localStorage.setItem('calorie_foodBank', JSON.stringify(calFoodBank)); } catch (err) {} }
-    if (entriesChangedDates.length) { try { localStorage.setItem('calorie_entries', JSON.stringify(calEntries)); } catch (err) {} }
-    calRenderAll();
-    // A deletion (the Heidelberren dedup) or a "de" rename needs skipMerge, same reasoning
-    // as calDeleteFoodBankEntry/calSaveFoodBankEdit — otherwise the pre-push merge would
-    // resurrect a stale remote copy under the old key alongside the fixed one.
-    if (bankChanged) calPushToCloud({ skipMerge: bankEntryDeleted || bankDeKeyChanged });
-    if (entriesChangedDates.length) calPushEntriesForDates(entriesChangedDates);
-  }
-}
-
 function calApplyRemoteData(data) {
   calApplyingRemote = true;
   if (data.settings) {
@@ -420,7 +357,6 @@ function calApplyRemoteData(data) {
   calRenderWeightCard();
   calRenderBurnCard();
   calApplyingRemote = false;
-  calApplyLegacyFixes();
   if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);
 }
 
@@ -467,8 +403,7 @@ function calSubscribeToEntriesCloud(code) {
       calRefreshTopFoodsCache();
       calRenderAll();
       calApplyingRemote = false;
-      calApplyLegacyFixes();
-      markSynced();
+          markSynced();
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (calorie entries): ' + err.message);
@@ -1474,7 +1409,6 @@ function calLoadData() {
   calRenderAll();
   calRenderWeightCard();
   calRenderBurnCard();
-  calApplyLegacyFixes();
 }
 
 document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
