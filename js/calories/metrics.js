@@ -175,8 +175,12 @@ function calDailyDeficit(person, ds) {
   if (burned === undefined) {
     // Fall back to the configured default burn so a day with food logged but a
     // forgotten burn entry doesn't silently drop out of the deficit total.
+    // Fallback only estimates COMPLETED days: today is still being eaten through,
+    // so counting it against the default burn would show a large fake deficit until
+    // the day's food is fully logged. An explicit burn entry for today still counts —
+    // logging it is the deliberate end-of-day signal.
     const fallback = (state.calGoals[person] || {}).defaultBurn;
-    if (!(fallback > 0) || ds > todayStr()) return null;
+    if (!(fallback > 0) || ds >= todayStr()) return null;
     burned = fallback;
   }
   return burned - calDayTotals(person, ds).calories;
@@ -259,7 +263,7 @@ export function calPopulateGoalsInputs() {
   document.getElementById('p1ProtLabel').textContent = sharedSettings.p1 + ' — Protein goal (min, g)';
   document.getElementById('p2CalLabel').textContent = sharedSettings.p2 + ' — Calorie goal (max, kcal)';
   document.getElementById('p2ProtLabel').textContent = sharedSettings.p2 + ' — Protein goal (min, g)';
-  document.getElementById('p1BurnLabel').textContent = sharedSettings.p1 + ' — Default daily burn (kcal), used for deficit days with food logged but no burn entry (0 = off)';
+  document.getElementById('p1BurnLabel').textContent = sharedSettings.p1 + ' — Default daily burn (kcal), fallback for past days with food logged but no burn entry; today only counts once a burn is logged (0 = off)';
 }
 
 async function calSaveGoals() {
