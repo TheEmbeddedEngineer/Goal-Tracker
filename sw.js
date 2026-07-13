@@ -1,7 +1,12 @@
 // Stale-while-revalidate for the app shell only. Firebase/CDN requests are cross-origin
 // and pass through untouched — Firestore sync must never be served from cache.
-const CACHE_NAME = 'couple-tracker-v1';
-const APP_SHELL = ['./', './index.html', './icon-weekly.png', './icon-192.png', './icon-512.png', './manifest.json'];
+const CACHE_NAME = 'couple-tracker-v2';
+const APP_SHELL = [
+  './', './index.html', './styles.css',
+  './js/core.js', './js/data.js', './js/shared.js', './js/weekly.js',
+  './js/calories.js', './js/training.js', './js/app.js',
+  './icon-weekly.png', './icon-192.png', './icon-512.png', './manifest.json'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
