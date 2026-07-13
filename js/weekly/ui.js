@@ -1,105 +1,32 @@
-import {
-  db, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, collection,
-  query, where, documentId, deleteField,
-  ensureAuth, setSyncStatus, markSynced, coupleCode, confirmWipe, register,
-  loadActivePerson, saveActivePerson, todayStr, parseDate, dstr, getMonday,
-  calRound2, buildMonthGrid, buildTrendChart
-} from './core.js';
-import { sharedSettings, renderTodayCard, renderGlanceBar, applySharedSettingsToInputs } from './shared.js';
+import { CATS, DAY_LABELS, EARLIEST_VISIBLE_WEEK, state } from './state.js';
+import { wkPushToCloud } from './sync.js';
+import { confirmWipe, dstr, getMonday, parseDate, saveActivePerson, todayStr } from '../core.js';
+import { renderGlanceBar, renderTodayCard, sharedSettings } from '../shared.js';
 
-
-
-const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
-const DAY_LABELS = ['M','T','W','T','F','S','S'];
-const EARLIEST_VISIBLE_WEEK = '2026-06-29';
-let wkEntries = {};
-let wkThresholds = { nutrition:5, screen:5, sport:5 };
-let wkWeeklyThresholds = {};
-let wkActivePerson = loadActivePerson('wkActivePerson');
-let wkViewedWeekMonday = null;
-let wkUnsub = null;
-let wkApplyingRemote = false;
-
-function wkApplyRemoteData(data) {
-  wkApplyingRemote = true;
-  wkEntries = data.entries || {};
-  if (data.settings) {
-    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
-    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
-    wkThresholds = data.settings.thresholds || wkThresholds;
-  }
-  wkWeeklyThresholds = data.weeklyThresholds || {};
-  applySharedSettingsToInputs();
-  document.getElementById('thNutrition').value = wkThresholds.nutrition;
-  document.getElementById('thScreen').value = wkThresholds.screen;
-  document.getElementById('thSport').value = wkThresholds.sport;
-  try { localStorage.setItem('entries', JSON.stringify(wkEntries)); } catch (err) {}
-  try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds })); } catch (err) {}
-  try { localStorage.setItem('weeklyThresholds', JSON.stringify(wkWeeklyThresholds)); } catch (err) {}
-  wkRenderPersonTabs();
-  wkLoadCheckboxesForDate();
-  wkRenderAll();
-  wkApplyingRemote = false;
-}
-
-function wkSubscribeToCloud(code) {
-  if (wkUnsub) { wkUnsub(); wkUnsub = null; }
-  if (!code) return;
-  ensureAuth().then(() => {
-    const ref = doc(db, 'trackers', code);
-    wkUnsub = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        wkApplyRemoteData(snap.data());
-      } else {
-        wkPushToCloud({ replace: true });
-      }
-      markSynced();
-    }, (err) => {
-      console.error(err);
-      setSyncStatus('Sync error (weekly): ' + err.message);
-    });
-  });
-}
-
-async function wkPushToCloud(opts = {}) {
-  if (!coupleCode || wkApplyingRemote) return;
-  try {
-    await ensureAuth();
-    const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'trackers', coupleCode), {
-      entries: wkEntries,
-      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds },
-      weeklyThresholds: wkWeeklyThresholds
-    }, writeOpts);
-  } catch (err) {
-    console.error(err);
-    setSyncStatus('Sync error (weekly): could not save');
-  }
-}
 function fmtDate(s) { return parseDate(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 function weekKeyFor(dateStr) { return dstr(getMonday(parseDate(dateStr))); }
 
 async function wkSaveThresholds() {
-  wkThresholds = {
+  state.wkThresholds = {
     nutrition: parseInt(document.getElementById('thNutrition').value) || 1,
     screen: parseInt(document.getElementById('thScreen').value) || 1,
     sport: parseInt(document.getElementById('thSport').value) || 1
   };
-  try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: wkThresholds })); } catch (err) {}
+  try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: state.wkThresholds })); } catch (err) {}
   wkRenderAll();
   wkPushToCloud();
 }
 
-function wkRenderPersonTabs() {
+export function wkRenderPersonTabs() {
   const tabs = document.getElementById('wkPersonTabs');
   tabs.innerHTML = `
-    <button data-p="p1" class="${wkActivePerson==='p1'?'active':''}">${sharedSettings.p1}</button>
-    <button data-p="p2" class="${wkActivePerson==='p2'?'active':''}">${sharedSettings.p2}</button>
+    <button data-p="p1" class="${state.wkActivePerson==='p1'?'active':''}">${sharedSettings.p1}</button>
+    <button data-p="p2" class="${state.wkActivePerson==='p2'?'active':''}">${sharedSettings.p2}</button>
   `;
   tabs.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => {
-      wkActivePerson = b.dataset.p;
-      saveActivePerson('wkActivePerson', wkActivePerson);
+      state.wkActivePerson = b.dataset.p;
+      saveActivePerson('wkActivePerson', state.wkActivePerson);
       wkRenderPersonTabs();
       wkLoadCheckboxesForDate();
       renderGlanceBar();
@@ -109,9 +36,9 @@ function wkRenderPersonTabs() {
 
 function wkSelectedDate() { return document.getElementById('wkDatePicker').value || todayStr(); }
 
-function wkLoadCheckboxesForDate() {
+export function wkLoadCheckboxesForDate() {
   const ds = wkSelectedDate();
-  const day = (wkEntries[wkActivePerson] || {})[ds] || {};
+  const day = (state.wkEntries[state.wkActivePerson] || {})[ds] || {};
   document.getElementById('cbNutrition').checked = !!day.nutrition;
   document.getElementById('cbScreen').checked = !!day.screen;
   document.getElementById('cbSport').checked = !!day.sport;
@@ -127,34 +54,34 @@ function wkUpdateRowStyles() {
 
 async function wkSaveDay() {
   const ds = wkSelectedDate();
-  if (!wkEntries[wkActivePerson]) wkEntries[wkActivePerson] = {};
-  wkEntries[wkActivePerson][ds] = {
+  if (!state.wkEntries[state.wkActivePerson]) state.wkEntries[state.wkActivePerson] = {};
+  state.wkEntries[state.wkActivePerson][ds] = {
     nutrition: document.getElementById('cbNutrition').checked,
     screen: document.getElementById('cbScreen').checked,
     sport: document.getElementById('cbSport').checked
   };
-  try { localStorage.setItem('entries', JSON.stringify(wkEntries)); } catch (err) { console.error(err); }
+  try { localStorage.setItem('entries', JSON.stringify(state.wkEntries)); } catch (err) { console.error(err); }
   wkRenderAll();
   wkPushToCloud();
 }
 
-function wkThresholdsForWeek(weekMonday) {
+export function wkThresholdsForWeek(weekMonday) {
   const key = dstr(weekMonday);
   const nowMonday = getMonday(new Date());
   if (weekMonday.getTime() < nowMonday.getTime()) {
-    if (!wkWeeklyThresholds[key]) {
-      wkWeeklyThresholds[key] = { ...wkThresholds };
-      try { localStorage.setItem('weeklyThresholds', JSON.stringify(wkWeeklyThresholds)); } catch (err) {}
+    if (!state.wkWeeklyThresholds[key]) {
+      state.wkWeeklyThresholds[key] = { ...state.wkThresholds };
+      try { localStorage.setItem('weeklyThresholds', JSON.stringify(state.wkWeeklyThresholds)); } catch (err) {}
       wkPushToCloud();
     }
-    return wkWeeklyThresholds[key];
+    return state.wkWeeklyThresholds[key];
   }
-  return wkThresholds;
+  return state.wkThresholds;
 }
 
-function wkCatCountsForWeek(personKey, weekMonday) {
+export function wkCatCountsForWeek(personKey, weekMonday) {
   const counts = { nutrition:0, screen:0, sport:0 };
-  const personEntries = wkEntries[personKey] || {};
+  const personEntries = state.wkEntries[personKey] || {};
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
     const day = personEntries[dstr(d)];
@@ -164,7 +91,7 @@ function wkCatCountsForWeek(personKey, weekMonday) {
 }
 
 function wkDayCompletionLevel(personKey, dateStr) {
-  const day = (wkEntries[personKey] || {})[dateStr];
+  const day = (state.wkEntries[personKey] || {})[dateStr];
   if (!day) return -1;
   let n = 0;
   CATS.forEach(([k]) => { if (day[k]) n++; });
@@ -188,7 +115,7 @@ function wkRenderHeatmap(personKey, weekMonday) {
 // Detailed per-category breakdown for a single day, shown on hover/tap of a heatmap square.
 function wkDayDetailText(personKey, dateStr) {
   const label = parseDate(dateStr).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
-  const day = (wkEntries[personKey] || {})[dateStr];
+  const day = (state.wkEntries[personKey] || {})[dateStr];
   if (!day) return label + ': nothing logged yet';
   const parts = CATS.map(([k, catLabel]) => (day[k] ? '✓ ' : '✗ ') + catLabel);
   return label + ' — ' + parts.join('   ');
@@ -197,7 +124,7 @@ function wkDayDetailText(personKey, dateStr) {
 // Consecutive most-recently-completed weeks (not counting the in-progress current week)
 // with no fine, i.e. every category threshold met. Breaks on the first missed week, or
 // hits the app's data horizon.
-function wkCurrentStreak(person) {
+export function wkCurrentStreak(person) {
   let monday = getMonday(new Date());
   monday.setDate(monday.getDate() - 7);
   let streak = 0;
@@ -212,14 +139,14 @@ function wkCurrentStreak(person) {
   return streak;
 }
 
-function wkRenderAll() {
+export function wkRenderAll() {
   wkRenderThisWeek();
   wkRenderHistory();
   renderTodayCard();
 }
 
 function wkRenderThisWeek() {
-  const monday = wkViewedWeekMonday;
+  const monday = state.wkViewedWeekMonday;
   const nowMonday = getMonday(new Date());
   const isCurrentWeek = monday.getTime() === nowMonday.getTime();
   // Days fully finished so far this week — today doesn't count until it's over,
@@ -282,13 +209,13 @@ function wkRenderThisWeek() {
 function wkAllWeekKeys() {
   const keys = new Set();
   ['p1','p2'].forEach(pk => {
-    Object.keys(wkEntries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
+    Object.keys(state.wkEntries[pk] || {}).forEach(ds => keys.add(weekKeyFor(ds)));
   });
   return Array.from(keys).filter(k => k >= EARLIEST_VISIBLE_WEEK).sort().reverse();
 }
 
 function wkRenderHistory() {
-  const viewedWeekKey = dstr(wkViewedWeekMonday);
+  const viewedWeekKey = dstr(state.wkViewedWeekMonday);
   const nowWeekKey = dstr(getMonday(new Date()));
   const weeks = wkAllWeekKeys().filter(w => w !== viewedWeekKey && w !== nowWeekKey);
   const list = document.getElementById('historyList');
@@ -332,14 +259,14 @@ document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
 
 document.getElementById('saveBtn').addEventListener('click', wkSaveDay);
 document.getElementById('prevWeekBtn').addEventListener('click', () => {
-  if (dstr(wkViewedWeekMonday) <= EARLIEST_VISIBLE_WEEK) return;
-  wkViewedWeekMonday.setDate(wkViewedWeekMonday.getDate() - 7);
+  if (dstr(state.wkViewedWeekMonday) <= EARLIEST_VISIBLE_WEEK) return;
+  state.wkViewedWeekMonday.setDate(state.wkViewedWeekMonday.getDate() - 7);
   wkRenderAll();
 });
 document.getElementById('nextWeekBtn').addEventListener('click', () => {
   const nowMonday = getMonday(new Date());
-  if (wkViewedWeekMonday.getTime() >= nowMonday.getTime()) return;
-  wkViewedWeekMonday.setDate(wkViewedWeekMonday.getDate() + 7);
+  if (state.wkViewedWeekMonday.getTime() >= nowMonday.getTime()) return;
+  state.wkViewedWeekMonday.setDate(state.wkViewedWeekMonday.getDate() + 7);
   wkRenderAll();
 });
 document.getElementById('wkDatePicker').addEventListener('change', wkLoadCheckboxesForDate);
@@ -349,68 +276,13 @@ document.getElementById('wkDatePicker').addEventListener('change', wkLoadCheckbo
 
 document.getElementById('wkResetBtn').addEventListener('click', async () => {
   if (!confirmWipe('tracked weekly data')) return;
-  wkEntries = {};
-  wkWeeklyThresholds = {};
+  state.wkEntries = {};
+  state.wkWeeklyThresholds = {};
   try { localStorage.removeItem('entries'); } catch (err) {}
   try { localStorage.removeItem('weeklyThresholds'); } catch (err) {}
   wkLoadCheckboxesForDate();
   wkRenderAll();
   wkPushToCloud({ replace: true });
-});
-
-function wkLoadData() {
-  try { wkEntries = JSON.parse(localStorage.getItem('entries') || '{}'); } catch (err) { wkEntries = {}; }
-  try {
-    const s = localStorage.getItem('settings');
-    if (s) { const parsed = JSON.parse(s); wkThresholds = parsed.thresholds || wkThresholds; }
-  } catch (err) {}
-  try { wkWeeklyThresholds = JSON.parse(localStorage.getItem('weeklyThresholds') || '{}'); } catch (err) { wkWeeklyThresholds = {}; }
-
-  document.getElementById('thNutrition').value = wkThresholds.nutrition;
-  document.getElementById('thScreen').value = wkThresholds.screen;
-  document.getElementById('thSport').value = wkThresholds.sport;
-  document.getElementById('wkDatePicker').value = todayStr();
-  document.getElementById('wkDatePicker').max = todayStr();
-
-  wkViewedWeekMonday = getMonday(new Date());
-
-  wkRenderPersonTabs();
-  wkLoadCheckboxesForDate();
-  wkRenderAll();
-}
-
-register('weekly', {
-  loadData: wkLoadData,
-  subscribe: (code) => wkSubscribeToCloud(code),
-  renderAll: wkRenderAll,
-  isDoneToday: (pk) => !!((wkEntries[pk] || {})[todayStr()]),
-  glanceHtml: () => {
-    const pk = wkActivePerson;
-    const monday = getMonday(new Date());
-    const counts = wkCatCountsForWeek(pk, monday);
-    const th = wkThresholdsForWeek(monday);
-    const streak = wkCurrentStreak(pk);
-    return CATS.map(([k, label]) => `${label.split(' ')[0]} <b>${counts[k]}/${th[k]}</b>`).join(' &middot; ')
-      + (streak > 0 ? ` &middot; &#128293;${streak}` : '');
-  },
-  jumpToToday: (pk) => {
-    wkActivePerson = pk;
-    saveActivePerson('wkActivePerson', pk);
-    wkViewedWeekMonday = getMonday(new Date());
-    document.getElementById('wkDatePicker').value = todayStr();
-    wkRenderPersonTabs();
-    wkLoadCheckboxesForDate();
-    wkRenderAll();
-  },
-  setPerson: (pk) => {
-    wkActivePerson = pk;
-    saveActivePerson('wkActivePerson', pk);
-    wkRenderPersonTabs();
-    wkLoadCheckboxesForDate();
-    wkRenderAll();
-  },
-  onSettingsChanged: () => { wkRenderPersonTabs(); wkRenderAll(); wkPushToCloud(); },
-  exportData: () => ({ entries: wkEntries, weeklyThresholds: wkWeeklyThresholds })
 });
 
 let initialWkThresholdsCollapsed = true;

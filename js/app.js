@@ -2,9 +2,9 @@
 // time this executes (import order below). This file only sequences startup.
 import { feature, coupleCode, setSyncStatus } from './core.js';
 import { initShared, showTab } from './shared.js';
-import './weekly.js';
-import './calories.js';
-import './training.js';
+import './weekly/index.js';
+import './calories/index.js';
+import './training/index.js';
 
 initShared();
 

@@ -1,10 +1,15 @@
 // Stale-while-revalidate for the app shell only. Firebase/CDN requests are cross-origin
 // and pass through untouched — Firestore sync must never be served from cache.
-const CACHE_NAME = 'couple-tracker-v2';
+const CACHE_NAME = 'couple-tracker-v3';
 const APP_SHELL = [
   './', './index.html', './styles.css',
-  './js/core.js', './js/data.js', './js/shared.js', './js/weekly.js',
-  './js/calories.js', './js/training.js', './js/app.js',
+  './js/core.js', './js/data.js', './js/shared.js', './js/app.js',
+  './js/weekly/state.js', './js/weekly/sync.js', './js/weekly/ui.js', './js/weekly/index.js',
+  './js/calories/state.js', './js/calories/sync.js', './js/calories/log.js',
+  './js/calories/metrics.js', './js/calories/bank.js', './js/calories/insights.js',
+  './js/calories/index.js',
+  './js/training/state.js', './js/training/sync.js', './js/training/overview.js',
+  './js/training/day.js', './js/training/render.js', './js/training/index.js',
   './icon-weekly.png', './icon-192.png', './icon-512.png', './manifest.json'
 ];
 

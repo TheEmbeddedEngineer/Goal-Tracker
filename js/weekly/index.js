@@ -1,0 +1,65 @@
+import { CATS, state, ui } from './state.js';
+import { wkPushToCloud, wkSubscribeToCloud } from './sync.js';
+import { wkCatCountsForWeek, wkCurrentStreak, wkLoadCheckboxesForDate, wkRenderAll, wkRenderPersonTabs, wkThresholdsForWeek } from './ui.js';
+import { getMonday, register, saveActivePerson, todayStr } from '../core.js';
+
+function wkLoadData() {
+  try { state.wkEntries = JSON.parse(localStorage.getItem('entries') || '{}'); } catch (err) { state.wkEntries = {}; }
+  try {
+    const s = localStorage.getItem('settings');
+    if (s) { const parsed = JSON.parse(s); state.wkThresholds = parsed.thresholds || state.wkThresholds; }
+  } catch (err) {}
+  try { state.wkWeeklyThresholds = JSON.parse(localStorage.getItem('weeklyThresholds') || '{}'); } catch (err) { state.wkWeeklyThresholds = {}; }
+
+  document.getElementById('thNutrition').value = state.wkThresholds.nutrition;
+  document.getElementById('thScreen').value = state.wkThresholds.screen;
+  document.getElementById('thSport').value = state.wkThresholds.sport;
+  document.getElementById('wkDatePicker').value = todayStr();
+  document.getElementById('wkDatePicker').max = todayStr();
+
+  state.wkViewedWeekMonday = getMonday(new Date());
+
+  wkRenderPersonTabs();
+  wkLoadCheckboxesForDate();
+  wkRenderAll();
+}
+
+register('weekly', {
+  loadData: wkLoadData,
+  subscribe: (code) => wkSubscribeToCloud(code),
+  renderAll: wkRenderAll,
+  isDoneToday: (pk) => !!((state.wkEntries[pk] || {})[todayStr()]),
+  glanceHtml: () => {
+    const pk = state.wkActivePerson;
+    const monday = getMonday(new Date());
+    const counts = wkCatCountsForWeek(pk, monday);
+    const th = wkThresholdsForWeek(monday);
+    const streak = wkCurrentStreak(pk);
+    return CATS.map(([k, label]) => `${label.split(' ')[0]} <b>${counts[k]}/${th[k]}</b>`).join(' &middot; ')
+      + (streak > 0 ? ` &middot; &#128293;${streak}` : '');
+  },
+  jumpToToday: (pk) => {
+    state.wkActivePerson = pk;
+    saveActivePerson('wkActivePerson', pk);
+    state.wkViewedWeekMonday = getMonday(new Date());
+    document.getElementById('wkDatePicker').value = todayStr();
+    wkRenderPersonTabs();
+    wkLoadCheckboxesForDate();
+    wkRenderAll();
+  },
+  setPerson: (pk) => {
+    state.wkActivePerson = pk;
+    saveActivePerson('wkActivePerson', pk);
+    wkRenderPersonTabs();
+    wkLoadCheckboxesForDate();
+    wkRenderAll();
+  },
+  onSettingsChanged: () => { wkRenderPersonTabs(); wkRenderAll(); wkPushToCloud(); },
+  exportData: () => ({ entries: state.wkEntries, weeklyThresholds: state.wkWeeklyThresholds })
+});
+
+// Wire the late-bound slots (see state.js) now that everything is defined.
+ui.loadCheckboxesForDate = wkLoadCheckboxesForDate;
+ui.renderAll = wkRenderAll;
+ui.renderPersonTabs = wkRenderPersonTabs;
+
