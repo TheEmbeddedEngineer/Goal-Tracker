@@ -1,6 +1,6 @@
 // Stale-while-revalidate for the app shell only. Firebase/CDN requests are cross-origin
 // and pass through untouched — Firestore sync must never be served from cache.
-const CACHE_NAME = 'couple-tracker-v5';
+const CACHE_NAME = 'couple-tracker-v6';
 const APP_SHELL = [
   './', './index.html', './styles.css',
   './js/core.js', './js/data.js', './js/shared.js', './js/app.js',
