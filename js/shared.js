@@ -234,7 +234,6 @@ function dpRefresh(entry) {
   if (label !== entry.last) {
     entry.disp.textContent = label;
     entry.last = label;
-    entry.todayBtn.style.display = entry.input.value === todayStr() ? 'none' : '';
     const v = entry.input.value;
     entry.nextBtn.disabled = !!(entry.input.max && v && v >= entry.input.max);
     entry.prevBtn.disabled = !!(entry.input.min && v && v <= entry.input.min);
@@ -276,16 +275,7 @@ function upgradeDatePicker(input) {
   wrap.parentNode.insertBefore(nextBtn, wrap.nextSibling);
   prevBtn.addEventListener('click', () => dpShift(input, -1));
   nextBtn.addEventListener('click', () => dpShift(input, 1));
-  const todayBtn = document.createElement('button');
-  todayBtn.type = 'button';
-  todayBtn.className = 'dp-today';
-  todayBtn.textContent = 'Today';
-  wrap.parentNode.insertBefore(todayBtn, nextBtn.nextSibling);
-  todayBtn.addEventListener('click', () => {
-    input.value = todayStr();
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  const entry = { input, disp, todayBtn, prevBtn, nextBtn, last: null };
+  const entry = { input, disp, prevBtn, nextBtn, last: null };
   dpRegistry.push(entry);
   input.addEventListener('change', () => dpRefresh(entry));
   input.addEventListener('input', () => dpRefresh(entry));
