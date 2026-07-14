@@ -68,11 +68,14 @@ export function calRenderMonth() {
 let calTrendMetric = 'calories';
 
 // Starts from i=days (oldest) down to i=1 (yesterday) — today is deliberately excluded
-// since it's still in progress and would read as a misleading dip/spike on the chart.
+// for the food metrics since the day is still in progress and would read as a misleading
+// dip on the chart. Weight is different: a weigh-in is final the moment it's logged, so
+// today's measurement belongs on the chart immediately.
 function calTrendPoints(person, metric, days) {
   const points = [];
   const today = new Date();
-  for (let i = days; i >= 1; i--) {
+  const newestOffset = metric === 'weight' ? 0 : 1;
+  for (let i = days; i >= newestOffset; i--) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const ds = dstr(d);
     let value;

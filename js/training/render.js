@@ -3,7 +3,7 @@ import { trRenderOverview, trRenderOverviewCalendarGrid, trRenderOverviewSelecte
 import { trDeleteLog, trLoadCoreCheckboxForDate, trLoadExtraActivityCheckbox, trLoadLogIntoForm, trLoadStepsCheckboxForDate, trRenderBackCare, trRenderDay, trRenderProgressChart, trSaveCoreLog, trSaveExtraActivity, trSaveLog, trSaveStepsCheck } from './day.js';
 import { saveActivePerson, todayStr } from '../core.js';
 import { DAY_LABELS_TR, DAY_ORDER, TR_EXTRA_ACTIVITIES } from '../data.js';
-import { renderTodayCard, sharedSettings } from '../shared.js';
+import { renderTodayCard, scanDatePickers, sharedSettings } from '../shared.js';
 
 export function trRenderPersonTabs() {
   const el = document.getElementById('trPersonTabs');
@@ -19,6 +19,7 @@ export function trRenderPersonTabs() {
       if (!order.includes(state.trActiveDay)) state.trActiveDay = 'overview';
       state.trActiveVariant = 'gym';
       state.trOverviewSelectedDate = null;
+      state.trLogDate = null;
       trRenderAll();
     });
   });
@@ -29,7 +30,7 @@ export function trRenderDayTabs() {
   const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
   el.innerHTML = order.map(d => `<button data-d="${d}" class="${state.trActiveDay === d ? 'active' : ''}">${DAY_LABELS_TR[d]}</button>`).join('');
   el.querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => { state.trActiveDay = b.dataset.d; state.trActiveVariant = 'gym'; trRenderContent(); trUpdateActiveTabStyles(); });
+    b.addEventListener('click', () => { state.trActiveDay = b.dataset.d; state.trActiveVariant = 'gym'; state.trLogDate = null; trRenderContent(); trUpdateActiveTabStyles(); });
   });
 }
 
@@ -108,9 +109,15 @@ export function trRenderContent() {
     const dateInput = document.getElementById('logDate');
     if (dateInput) {
       dateInput.max = todayStr();
-      dateInput.value = trPendingViewLog ? trPendingViewLog.date : todayStr();
+      // state.trLogDate survives re-renders (saves, remote-sync renders, variant
+      // switches), so the picked date no longer snaps back to today mid-logging.
+      if (trPendingViewLog) state.trLogDate = trPendingViewLog.date;
+      dateInput.value = state.trLogDate || todayStr();
       trLoadLogIntoForm(state.trActiveDay, list, state.trActiveVariant);
-      dateInput.addEventListener('change', () => trLoadLogIntoForm(state.trActiveDay, list, state.trActiveVariant));
+      dateInput.addEventListener('change', () => {
+        state.trLogDate = dateInput.value;
+        trLoadLogIntoForm(state.trActiveDay, list, state.trActiveVariant);
+      });
     }
     trPendingViewLog = null;
 
@@ -156,6 +163,7 @@ export function trRenderContent() {
           trPendingViewLog = { date };
           trRenderContent();
         } else {
+          state.trLogDate = date;
           document.getElementById('logDate').value = date;
           trLoadLogIntoForm(state.trActiveDay, list, state.trActiveVariant);
         }
@@ -170,6 +178,9 @@ export function trRenderContent() {
       });
     });
   }
+  // Upgrade any freshly rendered date inputs right away instead of leaving them as
+  // bare native pickers until the next 700ms background scan tick.
+  scanDatePickers();
 }
 
 export function trRenderAll() {

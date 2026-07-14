@@ -32,6 +32,13 @@ export const state = {
   // Same pattern as trCoreLogDate/trLoadCoreCheckboxForDate/trSaveCoreLog, generalized to
   // however many extra activities the active person has (see TR_EXTRA_ACTIVITIES).
   trExtraLogDates: {},
+  // The workout-log form's chosen date, kept across re-renders (saving, remote-sync
+  // renders, variant switches) so it doesn't silently snap back to today mid-logging.
+  // Cleared (= today) on person/day-tab switches and jumpToToday.
+  trLogDate: null,
+  // Show the "Saved ✓" note in the log form while now < this timestamp — it has to
+  // survive the immediate re-render AND the async post-push re-render.
+  trSavedFlashUntil: 0,
 };
 
 // Late-bound entry points assigned by index.js — used for the few upward

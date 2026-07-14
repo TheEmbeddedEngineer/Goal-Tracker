@@ -234,6 +234,7 @@
   .sync-dot.error { background:var(--red-border); }
 
   .field-error { color:var(--red-text); font-size:12px; margin:4px 0 8px; }
+  .field-success { color:var(--green-text); font-size:12px; margin:4px 0 8px; }
   input.input-error { border-color:var(--red-border) !important; }
 
   .lw-last.has-val { cursor:pointer; text-decoration:underline dotted; }

@@ -65,6 +65,11 @@ async function wkSaveDay() {
   wkPushToCloud();
 }
 
+// Freezing runs inside render paths (history, streaks, glance bar), which can visit
+// many unfrozen past weeks in one pass — coalesce the resulting cloud writes into a
+// single deferred push instead of one full setDoc per week.
+let wkFreezePushQueued = false;
+
 export function wkThresholdsForWeek(weekMonday) {
   const key = dstr(weekMonday);
   const nowMonday = getMonday(new Date());
@@ -72,7 +77,10 @@ export function wkThresholdsForWeek(weekMonday) {
     if (!state.wkWeeklyThresholds[key]) {
       state.wkWeeklyThresholds[key] = { ...state.wkThresholds };
       try { localStorage.setItem('weeklyThresholds', JSON.stringify(state.wkWeeklyThresholds)); } catch (err) {}
-      wkPushToCloud();
+      if (!wkFreezePushQueued) {
+        wkFreezePushQueued = true;
+        setTimeout(() => { wkFreezePushQueued = false; wkPushToCloud(); }, 0);
+      }
     }
     return state.wkWeeklyThresholds[key];
   }
@@ -250,10 +258,15 @@ document.getElementById('wkThresholdsToggle').addEventListener('click', () => {
   setWkThresholdsCollapsed(!document.getElementById('wkThresholdsBody').classList.contains('collapsed'));
 });
 
+// Toggling saves immediately — the rows read as instant state, and requiring a
+// separate "Save this day" press silently discarded toggles whenever the person or
+// date changed first. The button stays as explicit reassurance; it's now a no-op
+// re-save of the same state.
 document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
   row.addEventListener('click', (evt) => {
     if (evt.target.tagName !== 'INPUT') { const cb = row.querySelector('input'); cb.checked = !cb.checked; }
     wkUpdateRowStyles();
+    wkSaveDay();
   });
 });
 

@@ -22,6 +22,7 @@ export function trRenderDay(day, dayKey) {
       ${list.map((ex, i) => `<div class="log-weight-row"><span class="lw-name">${trExName(ex[0], ex[2])}<span class="lw-reps">${ex[1]}</span></span><span class="lw-last" id="lwLast_${i}" data-target="logW_${i}" title="Tap to use this weight"></span><input type="number" id="logW_${i}" placeholder="kg" min="0"></div>`).join('')}
     </div>
     <p id="logError" class="field-error" style="display:none;">Enter at least one weight.</p>
+    <p id="logSavedMsg" class="field-success" style="display:${Date.now() < state.trSavedFlashUntil ? '' : 'none'};">Saved &#10003;</p>
     <button class="primary" id="saveLogBtn">Save log</button>
 
     <div class="section-title" style="margin-top:20px;">Past sessions</div>
@@ -126,6 +127,14 @@ export function trSaveLog(dayKey, list, variant) {
   const entry = { date, day: dayKey, variant, weights };
   if (idx >= 0) arr[idx] = entry; else arr.push(entry);
   try { localStorage.setItem('training_log', JSON.stringify(state.trTrainingLog)); } catch (err) {}
+  // Keep the form on the date that was just saved (a past-dated log used to snap back
+  // to today, with no visible confirmation the save happened at all).
+  state.trLogDate = date;
+  state.trSavedFlashUntil = Date.now() + 2500;
+  setTimeout(() => {
+    const el = document.getElementById('logSavedMsg');
+    if (el && Date.now() >= state.trSavedFlashUntil) el.style.display = 'none';
+  }, 2600);
   trPushToCloud();
   ui.renderContent();
 }

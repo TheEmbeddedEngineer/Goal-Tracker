@@ -17,7 +17,7 @@ const db = getFirestore(firebaseApp);
 
 export let coupleCode = '';
 export function setCoupleCode(c) { coupleCode = c; }
-export function resetSyncReady() { syncReadyCount = 0; }
+export function resetSyncReady() { syncReadySources.clear(); }
 
 /* Feature registry: weekly/calories/training register a small API here so the
    shared UI (tabs, Today card, glance bar, backup) can reach them without the
@@ -27,13 +27,16 @@ export function register(name, api) { featureRegistry[name] = api; }
 export function feature(name) { return featureRegistry[name]; }
 export function featureList() { return Object.values(featureRegistry); }
 let authReadyPromise = null;
-let syncReadyCount = 0;
+const syncReadySources = new Set();
 
 export function ensureAuth() {
   if (!authReadyPromise) {
     authReadyPromise = signInAnonymously(auth).catch(err => {
       console.error(err);
       setSyncStatus('Sync error: could not connect');
+      // Don't cache the failure — the next sync attempt should retry the sign-in
+      // (e.g. the app was opened offline and connectivity came back later).
+      authReadyPromise = null;
     });
   }
   return authReadyPromise;
@@ -64,9 +67,12 @@ export function confirmWipe(what) {
   return typed !== null && typed.trim().toLowerCase() === 'delete';
 }
 
-export function markSynced() {
-  syncReadyCount = Math.min(syncReadyCount + 1, 4);
-  if (syncReadyCount >= 4) setSyncStatus('Synced as "' + coupleCode + '"');
+// Each subscription reports its own name — counting distinct sources (not raw
+// snapshot events) so one chatty listener can't flip the dot green while another
+// collection never connected.
+export function markSynced(source) {
+  syncReadySources.add(source);
+  if (syncReadySources.size >= 4) setSyncStatus('Synced as "' + coupleCode + '"');
 }
 
 export function loadDevicePerson() {
@@ -84,6 +90,13 @@ export function saveActivePerson(key, value) {
   try { localStorage.setItem(key, value); } catch (err) {}
 }
 
+
+// For user-entered text (food names, bank entries) injected into innerHTML or
+// attribute values — a name like `Käse <3` or one containing quotes must render
+// as text, not break the markup.
+export function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 export function todayStr() {
   const d = new Date();

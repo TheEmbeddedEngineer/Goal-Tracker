@@ -77,6 +77,9 @@ document.getElementById('calResetBtn').addEventListener('click', async () => {
   if (!confirmWipe('logged food')) return;
   state.calEntries = {};
   try { localStorage.removeItem('calorie_entries'); } catch (err) {}
+  // The "Most logged" chips read this cache — without a refresh they'd keep
+  // offering foods from the history that was just wiped.
+  calRefreshTopFoodsCache();
   calRenderAll();
   if (!coupleCode) return;
   try {

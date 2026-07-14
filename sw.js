@@ -1,6 +1,6 @@
 // Stale-while-revalidate for the app shell only. Firebase/CDN requests are cross-origin
 // and pass through untouched — Firestore sync must never be served from cache.
-const CACHE_NAME = 'couple-tracker-v10';
+const CACHE_NAME = 'couple-tracker-v11';
 const APP_SHELL = [
   './', './index.html', './styles.css',
   './js/core.js', './js/data.js', './js/shared.js', './js/app.js',
@@ -20,7 +20,19 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+    caches.keys().then(keys => {
+      const oldCaches = keys.filter(k => k !== CACHE_NAME);
+      return Promise.all(oldCaches.map(k => caches.delete(k))).then(() => {
+        // Most deploys change JS/CSS (and bump CACHE_NAME) without touching
+        // index.html, so the etag check in the fetch handler never fires for them.
+        // A new CACHE_NAME activating over an old cache IS the update signal —
+        // tell open pages so they get the refresh toast. Skip on first-ever
+        // install (no old cache), where there's nothing to update from.
+        if (oldCaches.length === 0) return;
+        return self.clients.matchAll({ type: 'window' })
+          .then(clients => clients.forEach(c => c.postMessage('update-available')));
+      });
+    })
   );
   self.clients.claim();
 });

@@ -234,10 +234,12 @@ function dpRefresh(entry) {
   if (label !== entry.last) {
     entry.disp.textContent = label;
     entry.last = label;
-    const v = entry.input.value;
-    entry.nextBtn.disabled = !!(entry.input.max && v && v >= entry.input.max);
-    entry.prevBtn.disabled = !!(entry.input.min && v && v <= entry.input.min);
   }
+  // Outside the label guard: min/max can change without the value changing
+  // (e.g. the midnight-rollover bump below), and the arrows must follow.
+  const v = entry.input.value;
+  entry.nextBtn.disabled = !!(entry.input.max && v && v >= entry.input.max);
+  entry.prevBtn.disabled = !!(entry.input.min && v && v <= entry.input.min);
 }
 
 function dpShift(input, days) {
@@ -282,7 +284,20 @@ function upgradeDatePicker(input) {
   dpRefresh(entry);
 }
 
+let dpToday = todayStr();
+
 export function scanDatePickers() {
+  // Day rollover while the app stayed open (an installed PWA resumed the next
+  // morning): every picker in this app caps at "today", but most only set max at
+  // load — without this bump the › arrow stays disabled and the actual today is
+  // unreachable until a full reload.
+  const t = todayStr();
+  if (t !== dpToday) {
+    document.querySelectorAll('input[type=date]').forEach(inp => {
+      if (inp.max === dpToday) inp.max = t;
+    });
+    dpToday = t;
+  }
   document.querySelectorAll('input[type=date]:not([data-dp-upgraded])').forEach(upgradeDatePicker);
   for (let i = dpRegistry.length - 1; i >= 0; i--) {
     if (!document.body.contains(dpRegistry[i].input)) dpRegistry.splice(i, 1);

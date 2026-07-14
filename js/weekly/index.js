@@ -28,7 +28,12 @@ register('weekly', {
   loadData: wkLoadData,
   subscribe: (code) => wkSubscribeToCloud(code),
   renderAll: wkRenderAll,
-  isDoneToday: (pk) => !!((state.wkEntries[pk] || {})[todayStr()]),
+  // At least one category actually checked — since toggles auto-save, a mere
+  // toggled-on-then-off day exists as an all-false entry and shouldn't show ✓.
+  isDoneToday: (pk) => {
+    const day = (state.wkEntries[pk] || {})[todayStr()];
+    return !!day && Object.values(day).some(Boolean);
+  },
   glanceHtml: () => {
     const pk = state.wkActivePerson;
     const monday = getMonday(new Date());

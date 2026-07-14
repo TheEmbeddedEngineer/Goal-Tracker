@@ -142,8 +142,9 @@ app renders instantly and works offline. Purely device-local settings never sync
   in-place edit**, pushes pass `{skipMerge:true}` so a stale remote copy can't resurrect
   what was just removed. **Any new array-typed synced field needs the same treatment.**
   (Weekly needs none of this — its synced data is nested maps all the way down.)
-- The sync status dot turns green after all four subscriptions have delivered their
-  first snapshot (`markSynced` counts to 4).
+- The sync status dot turns green after all four subscriptions (weekly, calories,
+  calorie entries, training) have each delivered their first snapshot (`markSynced`
+  tracks distinct source names, not raw snapshot counts).
 - One-off data corrections ship as **idempotent self-healing code**: deployed normally,
   they check-and-fix on next load, no-op forever after, and get deleted once verified
   applied (see `TR_EXERCISE_RENAMES` in `js/data.js` — the live, currently-empty
@@ -175,8 +176,10 @@ jumps to that tab/person/date via `jumpToToday`.
 
 - Deploy = commit + push to `main`. GitHub Pages rebuilds take a variable ~30–60s.
 - `sw.js` precaches `APP_SHELL` and serves same-origin GETs stale-while-revalidate, so a
-  deploy shows up one load late. When the background revalidation of the shell sees a
-  changed etag, it messages open pages, which show a "new version — Refresh" toast.
+  deploy shows up one load late. Open pages get a "new version — Refresh" toast from two
+  signals: the new service worker's `activate` (fires whenever a deploy bumped
+  `CACHE_NAME`, i.e. any JS/CSS change), and an etag change on the revalidated
+  `index.html` (covers markup-only deploys that don't bump the cache).
 - **When adding/removing any JS/CSS file: update `APP_SHELL` in `sw.js` and bump
   `CACHE_NAME`** so installed PWAs refetch the whole shell atomically.
 

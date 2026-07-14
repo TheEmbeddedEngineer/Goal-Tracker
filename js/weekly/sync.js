@@ -38,7 +38,7 @@ export function wkSubscribeToCloud(code) {
       } else {
         wkPushToCloud({ replace: true });
       }
-      markSynced();
+      markSynced('weekly');
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (weekly): ' + err.message);

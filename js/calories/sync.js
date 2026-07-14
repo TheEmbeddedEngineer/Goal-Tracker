@@ -11,7 +11,10 @@ export function calEntriesCollectionQuery(code) {
   // Firestore has no "list docs by collection" for a client SDK without a field to filter
   // on, but document-id range queries work — this matches every calorieEntries doc whose
   // id starts with "{code}_" without needing a separate index of which months exist.
-  return query(collection(db, 'calorieEntries'), where(documentId(), '>=', code + '_'), where(documentId(), '<', code + '_'));
+  // The upper bound is "everything that starts with `{code}_`": \uf8ff sorts after any
+  // other character. (This used to be a literal invisible U+F8FF in the source, which
+  // looked byte-identical to the lower bound — keep it as an explicit escape.)
+  return query(collection(db, 'calorieEntries'), where(documentId(), '>=', code + '_'), where(documentId(), '<', code + '_\uf8ff'));
 }
 function calEntriesSliceForMonth(monthKey, sourceEntries) {
   const source = sourceEntries || state.calEntries;
@@ -82,7 +85,7 @@ export function calSubscribeToCloud(code) {
       } else {
         calPushToCloud({ replace: true });
       }
-      markSynced();
+      markSynced('calories');
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (calories): ' + err.message);
@@ -114,7 +117,7 @@ export function calSubscribeToEntriesCloud(code) {
       calRefreshTopFoodsCache();
       ui.renderAll();
       calApplyingRemote = false;
-          markSynced();
+      markSynced('calorieEntries');
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (calorie entries): ' + err.message);

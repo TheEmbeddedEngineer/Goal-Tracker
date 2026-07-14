@@ -1,6 +1,6 @@
 import { calNormName, state } from './state.js';
 import { calPushToCloud } from './sync.js';
-import { calRound2 } from '../core.js';
+import { calRound2, esc } from '../core.js';
 import { CAL_CATEGORIES } from '../data.js';
 
 // Which bank entry (keyed by its "de" name, same key calMergeFoodBank uses) is currently
@@ -13,12 +13,11 @@ function calFoodBankRowHtml(entry) {
   const key = entry.de;
   const unitLabel = unit === 'piece' ? 'piece' : '100g';
   if (calBankEditingKey === key) {
-    const attrSafe = s => (s || '').replace(/"/g, '&quot;');
     return `
     <div class="food-item" style="display:block;">
       <div class="manual-grid" style="grid-template-columns: 1fr 1fr; margin-bottom:6px;">
-        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">English name</label><input type="text" class="fb-edit-en" value="${attrSafe(entry.en)}"></div>
-        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">German name</label><input type="text" class="fb-edit-de" value="${attrSafe(entry.de)}"></div>
+        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">English name</label><input type="text" class="fb-edit-en" value="${esc(entry.en)}"></div>
+        <div><label style="font-size:11px; color:var(--text-secondary); display:block; margin-bottom:3px;">German name</label><input type="text" class="fb-edit-de" value="${esc(entry.de)}"></div>
       </div>
       <select class="fb-edit-category" style="width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; margin-bottom:6px;">
         ${CAL_CATEGORIES.map(c => `<option value="${c}" ${entry.category === c ? 'selected' : ''}>${c}</option>`).join('')}
@@ -35,16 +34,16 @@ function calFoodBankRowHtml(entry) {
         <span>Locked (protects it from one-off log edits)</span>
       </label>
       <div style="display:flex; gap:8px;">
-        <button class="primary fb-save" data-key="${key}" style="flex:1;">Save</button>
+        <button class="primary fb-save" data-key="${esc(key)}" style="flex:1;">Save</button>
         <button type="button" class="link-btn fb-cancel">Cancel</button>
       </div>
     </div>`;
   }
   return `<div class="food-item">
-    <span class="fi-name">${entry.en} / ${entry.de}${entry.locked !== false ? ' &#128274;' : ''}</span>
+    <span class="fi-name">${esc(entry.en)} / ${esc(entry.de)}${entry.locked !== false ? ' &#128274;' : ''}</span>
     <span class="fi-macros">${ref ? `${ref.calories} · ${ref.protein}P · ${ref.carbs}C · ${ref.fat}F` : 'no data'} <span style="color:var(--text-muted)">/ ${unitLabel}</span></span>
-    <button class="fi-edit fb-edit" data-key="${key}" title="Edit">&#9998;</button>
-    <button class="fi-del fb-del" data-key="${key}" title="Delete">&times;</button>
+    <button class="fi-edit fb-edit" data-key="${esc(key)}" title="Edit">&#9998;</button>
+    <button class="fi-del fb-del" data-key="${esc(key)}" title="Delete">&times;</button>
   </div>`;
 }
 

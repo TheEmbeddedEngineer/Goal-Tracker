@@ -1,6 +1,6 @@
 import { calCurrentStreak, calDayItems, calDayTotals, calFindInBank, calGoalsForDay, calMonthKey, calNormName, calSearchBank, calSelectedDate, state, ui } from './state.js';
 import { calPushEntriesForMonth, calPushToCloud } from './sync.js';
-import { calRound2, todayStr } from '../core.js';
+import { calRound2, esc, todayStr } from '../core.js';
 import { CAL_CATEGORIES } from '../data.js';
 
 export function calPopulateCategorySelect() {
@@ -101,7 +101,7 @@ function calRenderDropdown(matches) {
   calDropdownIndex = -1;
   const dd = document.getElementById('foodNameDropdown');
   if (matches.length === 0) { calCloseDropdown(); return; }
-  dd.innerHTML = matches.map((f, i) => `<div class="autocomplete-item" data-i="${i}">${f.en} <span class="ai-sub">/ ${f.de}</span></div>`).join('');
+  dd.innerHTML = matches.map((f, i) => `<div class="autocomplete-item" data-i="${i}">${esc(f.en)} <span class="ai-sub">/ ${esc(f.de)}</span></div>`).join('');
   dd.classList.add('open');
   dd.querySelectorAll('.autocomplete-item').forEach(el => {
     el.addEventListener('mousedown', (e) => { e.preventDefault(); calSelectBankEntry(calCurrentMatches[parseInt(el.dataset.i)]); });
@@ -176,7 +176,7 @@ function calSearchOnGoogle() {
   window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank');
 }
 
-function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category) {
+function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category, locked) {
   if (!amount || amount <= 0) return;
   const factor = unit === 'piece' ? (1 / amount) : (100 / amount);
   const refData = {
@@ -194,7 +194,7 @@ function calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, 
     const parts = name.split('/').map(s => s.trim()).filter(Boolean);
     const en = parts[0] || name;
     const de = parts[1] || parts[0] || name;
-    entry = { en, de, preferredUnit: unit, gram: null, piece: null, category, locked: true };
+    entry = { en, de, preferredUnit: unit, gram: null, piece: null, category, locked: locked !== false };
     entry[unit] = refData;
     state.calFoodBank.push(entry);
   }
@@ -252,8 +252,9 @@ async function calAddItem() {
   // Locked (the default) means this is a one-off tweak — the bank's saved reference
   // values are left alone. A brand-new food (no bank entry yet) is always saved so
   // first-time logging still seeds the bank for next time, regardless of the checkbox.
-  if (!calFindInBank(name) || !locked) {
-    calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category);
+  const bankChanged = !calFindInBank(name) || !locked;
+  if (bankChanged) {
+    calSaveOrUpdateBank(name, unit, amount, calories, protein, carbs, fat, category, locked);
   }
   try { localStorage.setItem('calorie_entries', JSON.stringify(state.calEntries)); } catch (err) {}
   calClearManualFields();
@@ -261,10 +262,12 @@ async function calAddItem() {
   ui.renderMonth();
   ui.renderTrendChart();
   ui.renderDeficitCard();
+  // The main calories doc only needs a push when the bank actually changed —
+  // skipping it otherwise saves two Firestore round trips per logged item.
+  if (bankChanged) calPushToCloud();
   // Editing (or topping up an existing row) replaces an item in place, so trust the
   // local result rather than merging — a stale remote copy could otherwise resurrect
   // the pre-edit/pre-merge version alongside the new one.
-  calPushToCloud();
   calPushEntriesForMonth(calMonthKey(ds), { skipMerge: wasEditing || mergedIntoExisting });
 }
 
@@ -276,6 +279,9 @@ function calDeleteItem(index) {
   if (!confirm(`Delete "${item.name}" from this day's log?`)) return;
   items.splice(index, 1);
   if (calEditingIndex === index) calClearManualFields();
+  // Deleting an item above the one being edited shifts every later index down —
+  // without this, "Update log entry" would silently overwrite the wrong row.
+  else if (calEditingIndex > index) calEditingIndex--;
   try { localStorage.setItem('calorie_entries', JSON.stringify(state.calEntries)); } catch (err) {}
   calRenderLogCard();
   ui.renderMonth();
@@ -307,15 +313,23 @@ export function calRenderRecentChips() {
   if (ranked.length === 0) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = '<div style="width:100%; font-size:11px; color:var(--text-muted); margin-bottom:2px;">Most logged</div>' +
-    ranked.map((r, i) => `<button type="button" class="recent-chip" data-i="${i}">${r.item.name} <span style="color:var(--text-muted)">&times;${r.count}</span></button>`).join('');
+    ranked.map((r, i) => `<button type="button" class="recent-chip" data-i="${i}">${esc(r.item.name)} <span style="color:var(--text-muted)">&times;${r.count}</span></button>`).join('');
   el.querySelectorAll('.recent-chip').forEach(btn => {
     const item = ranked[parseInt(btn.dataset.i)].item;
     btn.addEventListener('click', () => {
       calEditingIndex = -1;
-      calPopulateFormFromItem(item);
+      // Prefer the bank's reference values at the default amount: since same-day
+      // top-ups merge into one row, the raw logged item may carry a summed amount
+      // (e.g. 3 pc / 600 kcal) — not what a fresh add should start from.
+      const bankEntry = calFindInBank(item.name);
+      if (bankEntry) {
+        calSelectBankEntry(bankEntry);
+      } else {
+        calPopulateFormFromItem(item);
+        document.getElementById('bankStatus').textContent = 'Loaded — adjust if needed, then Add.';
+      }
       document.getElementById('addItemBtn').textContent = 'Add to log';
       document.getElementById('cancelEditBtn').style.display = 'none';
-      document.getElementById('bankStatus').textContent = 'Loaded — adjust if needed, then Add.';
     });
   });
 }
@@ -362,7 +376,7 @@ function calProgressRing(title, centerValue, centerLabel, fraction, status) {
 
 function calFoodItemRowHtml(it, i) {
   return `<div class="food-item">
-        <span class="fi-name">${it.name}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
+        <span class="fi-name">${esc(it.name)}${it.grams ? ' <span style="color:var(--text-muted)">(' + it.grams + (it.unit === 'piece' ? ' pc)' : 'g)') + '</span>' : ''}</span>
         <span class="fi-macros">${Math.round(it.calories)} · ${Math.round(it.protein)}P · ${Math.round(it.carbs)}C · ${Math.round(it.fat)}F</span>
         <button class="fi-edit" data-i="${i}">&#9998;</button>
         <button class="fi-del" data-i="${i}">&times;</button>
@@ -416,8 +430,10 @@ export function calRenderLogCard() {
   const fatGoal = (0.3 * goal.calories) / 9;
   const carbLeft = carbGoal - totals.carbs;
   const fatLeft = fatGoal - totals.fat;
-  const carbStatus = carbLeft >= 0 ? 'good' : 'bad';
-  const fatStatus = fatLeft >= 0 ? 'good' : 'bad';
+  // Same today-is-still-in-progress convention as the calorie/protein rings:
+  // going over the cap mid-today shows amber, only a finished day shows red.
+  const carbStatus = calRingStatus(ds, carbLeft >= 0);
+  const fatStatus = calRingStatus(ds, fatLeft >= 0);
 
   document.getElementById('calRings').innerHTML =
     calProgressRing('Calories', Math.abs(calLeft), calLeft >= 0 ? 'kcal left' : 'kcal over', goal.calories > 0 ? totals.calories / goal.calories : 0, calStatus) +

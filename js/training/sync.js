@@ -59,7 +59,7 @@ export function trSubscribeToCloud(code) {
       } else {
         trPushToCloud({ replace: true });
       }
-      markSynced();
+      markSynced('training');
     }, (err) => {
       console.error(err);
       setSyncStatus('Sync error (training): ' + err.message);

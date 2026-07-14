@@ -52,6 +52,7 @@ register('training', {
     saveActivePerson('trActivePerson', pk);
     state.trActiveDay = 'overview';
     state.trOverviewSelectedDate = todayStr();
+    state.trLogDate = null;
     trRenderAll();
   },
   setPerson: (pk) => {
@@ -60,6 +61,7 @@ register('training', {
     const order = (trCurrentPlan() && trCurrentPlan().dayOrder) || DAY_ORDER;
     if (!order.includes(state.trActiveDay)) state.trActiveDay = 'overview';
     state.trActiveVariant = 'gym';
+    state.trLogDate = null;
     trRenderAll();
   },
   onSettingsChanged: () => { trRenderPersonTabs(); trRenderDayTabs(); trRenderContent(); trPushToCloud(); },
