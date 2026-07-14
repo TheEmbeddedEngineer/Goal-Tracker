@@ -1,4 +1,4 @@
-import { calCurrentStreak, calDayItems, calDayTotals, calFindInBank, calGoalsForDay, calMonthKey, calSearchBank, calSelectedDate, state, ui } from './state.js';
+import { calCurrentStreak, calDayItems, calDayTotals, calFindInBank, calGoalsForDay, calMonthKey, calNormName, calSearchBank, calSelectedDate, state, ui } from './state.js';
 import { calPushEntriesForMonth, calPushToCloud } from './sync.js';
 import { calRound2, todayStr } from '../core.js';
 import { CAL_CATEGORIES } from '../data.js';
@@ -226,10 +226,28 @@ async function calAddItem() {
   const newItem = { name: nameEn, unit, grams: amount, calories, protein, carbs, fat, category };
   const items = state.calEntries[state.calActivePerson][ds].items;
   const wasEditing = calEditingIndex >= 0 && !!items[calEditingIndex];
+  let mergedIntoExisting = false;
   if (wasEditing) {
     items[calEditingIndex] = newItem;
   } else {
-    items.push(newItem);
+    // Logging the same food again on the same day tops up the existing row instead of
+    // adding a duplicate — amount and macros are summed (same name + same unit only).
+    const matchIdx = items.findIndex(it =>
+      calNormName(it.name) === calNormName(newItem.name) && it.unit === newItem.unit);
+    if (matchIdx >= 0) {
+      const ex = items[matchIdx];
+      items[matchIdx] = {
+        ...ex,
+        grams: calRound2((parseFloat(ex.grams) || 0) + newItem.grams),
+        calories: (ex.calories || 0) + newItem.calories,
+        protein: calRound2((ex.protein || 0) + newItem.protein),
+        carbs: calRound2((ex.carbs || 0) + newItem.carbs),
+        fat: calRound2((ex.fat || 0) + newItem.fat)
+      };
+      mergedIntoExisting = true;
+    } else {
+      items.push(newItem);
+    }
   }
   // Locked (the default) means this is a one-off tweak — the bank's saved reference
   // values are left alone. A brand-new food (no bank entry yet) is always saved so
@@ -243,10 +261,11 @@ async function calAddItem() {
   ui.renderMonth();
   ui.renderTrendChart();
   ui.renderDeficitCard();
-  // Editing replaces a specific item in place, so trust the local result rather than
-  // merging (a stale remote copy could otherwise resurrect the pre-edit version).
+  // Editing (or topping up an existing row) replaces an item in place, so trust the
+  // local result rather than merging — a stale remote copy could otherwise resurrect
+  // the pre-edit/pre-merge version alongside the new one.
   calPushToCloud();
-  calPushEntriesForMonth(calMonthKey(ds), { skipMerge: wasEditing });
+  calPushEntriesForMonth(calMonthKey(ds), { skipMerge: wasEditing || mergedIntoExisting });
 }
 
 function calDeleteItem(index) {
