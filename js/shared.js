@@ -4,6 +4,24 @@ import {
 } from './core.js';
 
 export let sharedSettings = { p1: 'You', p2: 'Partner' };
+const DEFAULT_NAMES = { p1: 'You', p2: 'Partner' };
+
+/* Placeholder-name guards (added after the 2026-07-14 incident): a stale device
+   running an old cached version with default local settings pushed its placeholder
+   "You" over the real p1 name in every synced doc. Placeholders carry no
+   information, so they must never travel: pushes omit them (syncableNames) and
+   applies ignore them coming from remote (applyRemoteNames). */
+export function applyRemoteNames(settings) {
+  if (!settings) return;
+  if (settings.p1 && settings.p1 !== DEFAULT_NAMES.p1) sharedSettings.p1 = settings.p1;
+  if (settings.p2 && settings.p2 !== DEFAULT_NAMES.p2) sharedSettings.p2 = settings.p2;
+}
+export function syncableNames() {
+  const s = {};
+  if (sharedSettings.p1 && sharedSettings.p1 !== DEFAULT_NAMES.p1) s.p1 = sharedSettings.p1;
+  if (sharedSettings.p2 && sharedSettings.p2 !== DEFAULT_NAMES.p2) s.p2 = sharedSettings.p2;
+  return s;
+}
 
 function downloadBackup() {
   const data = {

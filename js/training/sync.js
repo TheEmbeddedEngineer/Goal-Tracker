@@ -1,7 +1,7 @@
 import { state, ui } from './state.js';
 import { coupleCode, db, doc, ensureAuth, getDoc, markSynced, onSnapshot, setDoc, setSyncStatus } from '../core.js';
 import { TR_EXERCISE_RENAMES } from '../data.js';
-import { applySharedSettingsToInputs, sharedSettings } from '../shared.js';
+import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
 let trUnsub = null;
 let trApplyingRemote = false;
@@ -30,8 +30,7 @@ export function trApplyLegacyExerciseRenames() {
 function trApplyRemoteData(data) {
   trApplyingRemote = true;
   if (data.settings) {
-    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
-    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+    applyRemoteNames(data.settings);
   }
   state.trTrainingLog = data.trainingLog || { p1: [], p2: [] };
   state.trCoreLog = data.coreLog || { p1: [], p2: [] };
@@ -57,7 +56,9 @@ export function trSubscribeToCloud(code) {
       if (snap.exists()) {
         trApplyRemoteData(snap.data());
       } else {
-        trPushToCloud({ replace: true });
+        // Merge, not replace — creates a genuinely-new doc identically, but can
+        // never wipe an existing one if this branch fires wrongly (see weekly/sync.js).
+        trPushToCloud();
       }
       markSynced('training');
     }, (err) => {
@@ -120,7 +121,7 @@ export async function trPushToCloud(opts = {}) {
     }
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'training', coupleCode), {
-      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2 },
+      settings: syncableNames(),
       trainingLog: state.trTrainingLog,
       coreLog: state.trCoreLog,
       extraLog: state.trExtraLog,

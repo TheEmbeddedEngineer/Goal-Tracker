@@ -1,6 +1,6 @@
 import { state, ui } from './state.js';
 import { coupleCode, db, doc, ensureAuth, markSynced, onSnapshot, setDoc, setSyncStatus } from '../core.js';
-import { applySharedSettingsToInputs, sharedSettings } from '../shared.js';
+import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
 let wkUnsub = null;
 let wkApplyingRemote = false;
@@ -9,8 +9,7 @@ function wkApplyRemoteData(data) {
   wkApplyingRemote = true;
   state.wkEntries = data.entries || {};
   if (data.settings) {
-    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
-    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+    applyRemoteNames(data.settings);
     state.wkThresholds = data.settings.thresholds || state.wkThresholds;
   }
   state.wkWeeklyThresholds = data.weeklyThresholds || {};
@@ -36,7 +35,11 @@ export function wkSubscribeToCloud(code) {
       if (snap.exists()) {
         wkApplyRemoteData(snap.data());
       } else {
-        wkPushToCloud({ replace: true });
+        // Plain merge push: identical to replace when the doc truly doesn't exist
+        // (it creates it), but if this branch ever fires wrongly it can no longer
+        // wipe an existing doc. Replace stays reserved for the explicit,
+        // confirmWipe-guarded reset button.
+        wkPushToCloud();
       }
       markSynced('weekly');
     }, (err) => {
@@ -53,7 +56,7 @@ export async function wkPushToCloud(opts = {}) {
     const writeOpts = opts.replace ? {} : { merge: true };
     await setDoc(doc(db, 'trackers', coupleCode), {
       entries: state.wkEntries,
-      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: state.wkThresholds },
+      settings: { ...syncableNames(), thresholds: state.wkThresholds },
       weeklyThresholds: state.wkWeeklyThresholds
     }, writeOpts);
   } catch (err) {

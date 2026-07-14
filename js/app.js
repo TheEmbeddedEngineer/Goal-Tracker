@@ -25,9 +25,12 @@ try {
 showTab(initialTab);
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
-  });
+  // This module is loaded via dynamic import (see index.html's boot script), so the
+  // window 'load' event may already have fired by the time this runs — register
+  // directly in that case or the SW would never be installed.
+  const registerSW = () => navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
+  if (document.readyState === 'complete') registerSW();
+  else window.addEventListener('load', registerSW);
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data === 'update-available') document.getElementById('updateToast').classList.add('show');
   });

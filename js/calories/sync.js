@@ -1,6 +1,6 @@
 import { calItemKey, calMonthKey, calRefreshTopFoodsCache, monthKey, state, ui } from './state.js';
 import { collection, coupleCode, db, deleteField, doc, documentId, ensureAuth, getDoc, markSynced, onSnapshot, query, setDoc, setSyncStatus, where } from '../core.js';
-import { applySharedSettingsToInputs, sharedSettings } from '../shared.js';
+import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
 let calUnsub = null;
 let calEntriesUnsub = null;
@@ -50,8 +50,7 @@ function calMergeEntriesInto(localEntries, remoteEntries) {
 function calApplyRemoteData(data) {
   calApplyingRemote = true;
   if (data.settings) {
-    sharedSettings.p1 = data.settings.p1 || sharedSettings.p1;
-    sharedSettings.p2 = data.settings.p2 || sharedSettings.p2;
+    applyRemoteNames(data.settings);
     state.calGoals = data.settings.goals || state.calGoals;
   }
   state.calDailyGoals = data.dailyGoals || {};
@@ -83,7 +82,9 @@ export function calSubscribeToCloud(code) {
       if (snap.exists()) {
         calApplyRemoteData(snap.data());
       } else {
-        calPushToCloud({ replace: true });
+        // Merge, not replace — creates a genuinely-new doc identically, but can
+        // never wipe an existing one if this branch fires wrongly (see weekly/sync.js).
+        calPushToCloud();
       }
       markSynced('calories');
     }, (err) => {
@@ -206,7 +207,7 @@ export async function calPushToCloud(opts = {}) {
     }
     const writeOpts = opts.replace ? {} : { merge: true };
     const payload = {
-      settings: { p1: sharedSettings.p1, p2: sharedSettings.p2, goals: state.calGoals },
+      settings: { ...syncableNames(), goals: state.calGoals },
       dailyGoals: state.calDailyGoals,
       foodBank: state.calFoodBank,
       weightLog: state.calWeightLog,

@@ -145,6 +145,14 @@ app renders instantly and works offline. Purely device-local settings never sync
 - The sync status dot turns green after all four subscriptions (weekly, calories,
   calorie entries, training) have each delivered their first snapshot (`markSynced`
   tracks distinct source names, not raw snapshot counts).
+- **Placeholder names never travel.** The default person names carry no information,
+  so pushes omit them and applies ignore them (`syncableNames`/`applyRemoteNames` in
+  `shared.js`) — a device with stale/empty local settings can no longer overwrite a
+  real name in the cloud, and a poisoned cloud value can't displace a real local one.
+- **Nothing replaces a document wholesale except the explicit, confirmWipe-guarded
+  reset buttons.** The subscribe handlers create a missing doc with a plain merge
+  push; `{replace: true}` from a listener path is forbidden — if an exists:false
+  ever fired wrongly, a replace there would wipe the shared data.
 - One-off data corrections ship as **idempotent self-healing code**: deployed normally,
   they check-and-fix on next load, no-op forever after, and get deleted once verified
   applied (see `TR_EXERCISE_RENAMES` in `js/data.js` — the live, currently-empty
@@ -175,13 +183,18 @@ jumps to that tab/person/date via `jumpToToday`.
 ## Deploys and caching
 
 - Deploy = commit + push to `main`. GitHub Pages rebuilds take a variable ~30–60s.
-- `sw.js` precaches `APP_SHELL` and serves same-origin GETs stale-while-revalidate, so a
-  deploy shows up one load late. Open pages get a "new version — Refresh" toast from two
-  signals: the new service worker's `activate` (fires whenever a deploy bumped
-  `CACHE_NAME`, i.e. any JS/CSS change), and an etag change on the revalidated
-  `index.html` (covers markup-only deploys that don't bump the cache).
-- **When adding/removing any JS/CSS file: update `APP_SHELL` in `sw.js` and bump
-  `CACHE_NAME`** so installed PWAs refetch the whole shell atomically.
+- `sw.js` precaches `APP_SHELL` and serves it **cache-first from one atomically
+  installed cache version**. There is deliberately no per-file revalidation: mixing
+  files from two deploys in one page load breaks the ES-module graph and bricks the
+  boot. Updates arrive only as a whole, via a new `CACHE_NAME`: the new worker
+  installs the full shell fresh (`cache: 'reload'`), activates, deletes the old
+  cache, and posts `update-available` to open pages, which show the "Refresh" toast.
+- **Every shell change (any JS/CSS/HTML/icon file) requires a `CACHE_NAME` bump** —
+  without it the deploy is invisible to installed PWAs. New/removed files also go in
+  `APP_SHELL`.
+- As a last line of defense, `index.html` boots the app through a dynamic import:
+  if the module graph fails to load (e.g. a half-updated cache), it purges all
+  caches, unregisters the service worker, and reloads once.
 
 ## Testing
 

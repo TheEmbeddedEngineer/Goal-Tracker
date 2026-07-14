@@ -1,6 +1,9 @@
-// Stale-while-revalidate for the app shell only. Firebase/CDN requests are cross-origin
-// and pass through untouched — Firestore sync must never be served from cache.
-const CACHE_NAME = 'couple-tracker-v11';
+// Cache-first for the app shell, updated ONLY as a whole via a new CACHE_NAME (so a
+// page load can never mix JS modules from two different deploys — version skew across
+// ES modules kills the boot). Any shell change therefore requires a CACHE_NAME bump;
+// the activate handler announces the new version to open pages. Firebase/CDN requests
+// are cross-origin and pass through untouched — Firestore sync is never cached.
+const CACHE_NAME = 'couple-tracker-v12';
 const APP_SHELL = [
   './', './index.html', './styles.css',
   './js/core.js', './js/data.js', './js/shared.js', './js/app.js',
@@ -14,7 +17,11 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+  // cache: 'reload' bypasses the browser's HTTP cache so the new version's files
+  // are fetched fresh, not assembled from possibly-stale cached responses.
+  event.waitUntil(caches.open(CACHE_NAME).then(cache =>
+    cache.addAll(APP_SHELL.map(u => new Request(u, { cache: 'reload' })))
+  ));
   self.skipWaiting();
 });
 
@@ -40,27 +47,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
-  // Stale-while-revalidate means a deploy only shows up one load late — so when the
-  // background revalidation of the app shell fetches a changed copy (etag differs),
-  // tell the open pages so they can offer a one-tap refresh instead of silently
-  // running the previous version.
-  const isShell = event.request.mode === 'navigate' || url.pathname.endsWith('/index.html');
+  // Serve the shell cache-first from the atomically installed CACHE_NAME. No
+  // per-file revalidation into the running cache: that used to let one deploy's
+  // files mix with another's mid-update. A miss (e.g. after a manual cache wipe)
+  // falls back to the network and repopulates.
+  const key = event.request.mode === 'navigate' ? './index.html' : event.request;
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request).then(networkResponse => {
-        const putDone = caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
-        if (isShell && cached) {
-          const oldTag = cached.headers.get('etag') || cached.headers.get('last-modified');
-          const newTag = networkResponse.headers.get('etag') || networkResponse.headers.get('last-modified');
-          if (oldTag && newTag && oldTag !== newTag) {
-            putDone
-              .then(() => self.clients.matchAll({ type: 'window' }))
-              .then(clients => clients.forEach(c => c.postMessage('update-available')));
-          }
-        }
-        return networkResponse;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
+    caches.match(key).then(cached => cached || fetch(event.request).then(networkResponse => {
+      if (networkResponse.ok) {
+        const clone = networkResponse.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(key, clone));
+      }
+      return networkResponse;
+    }))
   );
 });
