@@ -1,6 +1,6 @@
 import {
   coupleCode, setCoupleCode, resetSyncReady, setSyncStatus,
-  feature, featureList, todayStr, loadDevicePerson
+  feature, featureList, todayStr, parseDate, dstr, loadDevicePerson
 } from './core.js';
 
 export let sharedSettings = { p1: 'You', p2: 'Partner' };
@@ -146,6 +146,7 @@ export function renderTodayCard() {
   });
   renderGlanceBar();
   updateDevicePersonOptions();
+  scanDatePickers();
 }
 
 // Jumps from the Today card straight to the relevant tab, with that person selected and
@@ -209,4 +210,65 @@ export function initShared() {
     document.body.classList.add('show-setup');
   }
   setSetupCollapsed(initialSetupCollapsed);
+  scanDatePickers();
 }
+
+
+/* ===== Date-picker UX: every date input shows "Today"/"Yesterday" instead of the
+   raw date, with a one-tap Today button when it's set to anything else. The native
+   input stays on top as an invisible overlay so tapping still opens the OS picker.
+   Training re-renders its pickers wholesale, so a periodic scan (re)upgrades any
+   input[type=date] that appears and refreshes labels set programmatically. ===== */
+const dpRegistry = [];
+
+function dpLabel(v) {
+  if (!v) return 'Pick date';
+  if (v === todayStr()) return 'Today';
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (v === dstr(y)) return 'Yesterday';
+  return parseDate(v).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function dpRefresh(entry) {
+  const label = dpLabel(entry.input.value);
+  if (label !== entry.last) {
+    entry.disp.textContent = label;
+    entry.last = label;
+    entry.todayBtn.style.display = entry.input.value === todayStr() ? 'none' : '';
+  }
+}
+
+function upgradeDatePicker(input) {
+  if (input.dataset.dpUpgraded) return;
+  input.dataset.dpUpgraded = '1';
+  const wrap = document.createElement('span');
+  wrap.className = 'dp-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  const disp = document.createElement('span');
+  disp.className = 'dp-display';
+  wrap.appendChild(disp);
+  wrap.appendChild(input);
+  const todayBtn = document.createElement('button');
+  todayBtn.type = 'button';
+  todayBtn.className = 'dp-today';
+  todayBtn.textContent = 'Today';
+  wrap.parentNode.insertBefore(todayBtn, wrap.nextSibling);
+  todayBtn.addEventListener('click', () => {
+    input.value = todayStr();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const entry = { input, disp, todayBtn, last: null };
+  dpRegistry.push(entry);
+  input.addEventListener('change', () => dpRefresh(entry));
+  input.addEventListener('input', () => dpRefresh(entry));
+  dpRefresh(entry);
+}
+
+export function scanDatePickers() {
+  document.querySelectorAll('input[type=date]:not([data-dp-upgraded])').forEach(upgradeDatePicker);
+  for (let i = dpRegistry.length - 1; i >= 0; i--) {
+    if (!document.body.contains(dpRegistry[i].input)) dpRegistry.splice(i, 1);
+    else dpRefresh(dpRegistry[i]);
+  }
+}
+setInterval(() => { if (!document.hidden) scanDatePickers(); }, 700);

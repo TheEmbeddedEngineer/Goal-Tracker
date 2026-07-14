@@ -214,6 +214,15 @@ export async function calPushToCloud(opts = {}) {
     // place (see calMonthKey above) — once legacy entries have been migrated out to
     // calorieEntries/*, remove the now-redundant copy still sitting in this doc.
     if (opts.migrateClearEntries) payload.entries = deleteField();
+    // Firestore's merge NEVER deletes map keys: pushing weightLog/burnLog without a
+    // date is a no-op for that date remotely, so a deleted entry would resurrect on
+    // the next load. Deletions must be explicit deleteField() tombstones.
+    if (opts.deleteKeys && !opts.replace) {
+      for (const [field, pk, ds] of opts.deleteKeys) {
+        payload[field] = { p1: { ...(payload[field].p1 || {}) }, p2: { ...(payload[field].p2 || {}) } };
+        payload[field][pk][ds] = deleteField();
+      }
+    }
     await setDoc(doc(db, 'calories', coupleCode), payload, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(state.calFoodBank)); } catch (err) {}
     try { localStorage.setItem('calorie_weightLog', JSON.stringify(state.calWeightLog)); } catch (err) {}

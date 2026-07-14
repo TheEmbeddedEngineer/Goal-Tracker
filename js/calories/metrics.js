@@ -68,7 +68,7 @@ function calRenderWeightHistory() {
       try { localStorage.setItem('calorie_weightLog', JSON.stringify(state.calWeightLog)); } catch (err) {}
       calRenderWeightCard();
       ui.renderTrendChart();
-      calPushToCloud();
+      calPushToCloud({ deleteKeys: [['weightLog', state.calActivePerson, btn.dataset.date]] });
     });
   });
 }
@@ -150,7 +150,7 @@ function calRenderBurnHistory() {
       delete state.calBurnLog[state.calActivePerson][btn.dataset.date];
       try { localStorage.setItem('calorie_burnLog', JSON.stringify(state.calBurnLog)); } catch (err) {}
       calRenderBurnCard();
-      calPushToCloud();
+      calPushToCloud({ deleteKeys: [['burnLog', state.calActivePerson, btn.dataset.date]] });
     });
   });
 }

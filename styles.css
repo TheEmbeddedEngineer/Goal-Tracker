@@ -277,3 +277,9 @@
     .day-tabs { flex-wrap:wrap; overflow-x:visible; }
     #updateToast { bottom: calc(72px + env(safe-area-inset-bottom)); }
   }
+
+  /* Upgraded date pickers: display label + invisible native input overlay + Today chip */
+  .dp-wrap { position:relative; display:inline-flex; vertical-align:middle; }
+  .dp-wrap input[type=date] { position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0; padding:0; border:0; }
+  .dp-display { display:inline-block; padding:7px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; min-width:92px; text-align:center; white-space:nowrap; }
+  .dp-today { margin-left:6px; padding:6px 11px; border:1px solid var(--border-strong); border-radius:100px; background:var(--card); color:var(--text); font-size:12px; cursor:pointer; flex-shrink:0; }
