@@ -235,7 +235,21 @@ function dpRefresh(entry) {
     entry.disp.textContent = label;
     entry.last = label;
     entry.todayBtn.style.display = entry.input.value === todayStr() ? 'none' : '';
+    const v = entry.input.value;
+    entry.nextBtn.disabled = !!(entry.input.max && v && v >= entry.input.max);
+    entry.prevBtn.disabled = !!(entry.input.min && v && v <= entry.input.min);
   }
+}
+
+function dpShift(input, days) {
+  const d = parseDate(input.value || todayStr());
+  d.setDate(d.getDate() + days);
+  let v = dstr(d);
+  if (input.max && v > input.max) v = input.max;
+  if (input.min && v < input.min) v = input.min;
+  if (v === input.value) return;
+  input.value = v;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function upgradeDatePicker(input) {
@@ -244,20 +258,34 @@ function upgradeDatePicker(input) {
   const wrap = document.createElement('span');
   wrap.className = 'dp-wrap';
   input.parentNode.insertBefore(wrap, input);
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'dp-step';
+  prevBtn.innerHTML = '&lsaquo;';
+  prevBtn.title = 'Previous day';
+  wrap.parentNode.insertBefore(prevBtn, wrap);
   const disp = document.createElement('span');
   disp.className = 'dp-display';
   wrap.appendChild(disp);
   wrap.appendChild(input);
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'dp-step';
+  nextBtn.innerHTML = '&rsaquo;';
+  nextBtn.title = 'Next day';
+  wrap.parentNode.insertBefore(nextBtn, wrap.nextSibling);
+  prevBtn.addEventListener('click', () => dpShift(input, -1));
+  nextBtn.addEventListener('click', () => dpShift(input, 1));
   const todayBtn = document.createElement('button');
   todayBtn.type = 'button';
   todayBtn.className = 'dp-today';
   todayBtn.textContent = 'Today';
-  wrap.parentNode.insertBefore(todayBtn, wrap.nextSibling);
+  wrap.parentNode.insertBefore(todayBtn, nextBtn.nextSibling);
   todayBtn.addEventListener('click', () => {
     input.value = todayStr();
     input.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  const entry = { input, disp, todayBtn, last: null };
+  const entry = { input, disp, todayBtn, prevBtn, nextBtn, last: null };
   dpRegistry.push(entry);
   input.addEventListener('change', () => dpRefresh(entry));
   input.addEventListener('input', () => dpRefresh(entry));
