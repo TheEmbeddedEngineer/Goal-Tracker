@@ -283,3 +283,13 @@ export const TR_EXTRA_ACTIVITIES = { p1: ['Tennis'], p2: ['Hyrox', 'Runs'] };
 // Currently empty — the 2026-07 renames were verified fully applied to the synced data
 // on 2026-07-13 and removed (see git history for the old entries).
 export const TR_EXERCISE_RENAMES = {};
+
+// One-time repair of frozen weekly thresholds (same self-healing pattern as
+// TR_EXERCISE_RENAMES): on 2026-07-14 a stale client re-froze a past week with its own
+// default thresholds, overwriting the original freeze. Each entry is
+// [weekKey, knownBadValue, correctValue] — applied only while the stored value still
+// exactly matches the bad one, so it's idempotent and can't touch anything else.
+// Remove once verified applied to the synced data.
+export const WK_FROZEN_FIXES = [
+  ['2026-06-29', { nutrition: 5, screen: 5, sport: 5 }, { nutrition: 3, screen: 3, sport: 3 }]
+];

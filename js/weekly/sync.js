@@ -1,9 +1,28 @@
-import { state, ui } from './state.js';
+import { CATS, state, ui } from './state.js';
 import { coupleCode, db, doc, ensureAuth, markSynced, onSnapshot, setDoc, setSyncStatus } from '../core.js';
+import { WK_FROZEN_FIXES } from '../data.js';
 import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
 let wkUnsub = null;
 let wkApplyingRemote = false;
+
+// See WK_FROZEN_FIXES in data.js — replaces a known-bad frozen week value with the
+// correct one and pushes; a no-op once (and wherever) the bad value is gone.
+export function wkApplyFrozenFixes() {
+  let changed = false;
+  WK_FROZEN_FIXES.forEach(([weekKey, bad, good]) => {
+    const cur = state.wkWeeklyThresholds[weekKey];
+    if (cur && CATS.every(([k]) => cur[k] === bad[k])) {
+      state.wkWeeklyThresholds[weekKey] = { ...good };
+      changed = true;
+    }
+  });
+  if (changed) {
+    try { localStorage.setItem('weeklyThresholds', JSON.stringify(state.wkWeeklyThresholds)); } catch (err) {}
+    ui.renderAll();
+    wkPushToCloud();
+  }
+}
 
 function wkApplyRemoteData(data) {
   wkApplyingRemote = true;
@@ -24,6 +43,7 @@ function wkApplyRemoteData(data) {
   ui.loadCheckboxesForDate();
   ui.renderAll();
   wkApplyingRemote = false;
+  wkApplyFrozenFixes();
 }
 
 export function wkSubscribeToCloud(code) {

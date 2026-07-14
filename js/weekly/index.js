@@ -1,5 +1,5 @@
 import { CATS, state, ui } from './state.js';
-import { wkPushToCloud, wkSubscribeToCloud } from './sync.js';
+import { wkApplyFrozenFixes, wkPushToCloud, wkSubscribeToCloud } from './sync.js';
 import { wkCatCountsForWeek, wkCurrentStreak, wkLoadCheckboxesForDate, wkRenderAll, wkRenderPersonTabs, wkThresholdsForWeek } from './ui.js';
 import { getMonday, register, saveActivePerson, todayStr } from '../core.js';
 
@@ -22,6 +22,7 @@ function wkLoadData() {
   wkRenderPersonTabs();
   wkLoadCheckboxesForDate();
   wkRenderAll();
+  wkApplyFrozenFixes();
 }
 
 register('weekly', {
