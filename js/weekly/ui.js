@@ -295,7 +295,7 @@ document.getElementById('wkResetBtn').addEventListener('click', async () => {
   try { localStorage.removeItem('weeklyThresholds'); } catch (err) {}
   wkLoadCheckboxesForDate();
   wkRenderAll();
-  wkPushToCloud({ replace: true });
+  wkPushToCloud({ replace: true, wipeMarker: true });
 });
 
 let initialWkThresholdsCollapsed = true;

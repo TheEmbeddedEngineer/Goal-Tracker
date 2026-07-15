@@ -24,9 +24,25 @@ export function wkApplyFrozenFixes() {
   }
 }
 
+function wkCountDays(entries) {
+  return ['p1', 'p2'].reduce((n, pk) => n + Object.keys((entries || {})[pk] || {}).length, 0);
+}
+
 function wkApplyRemoteData(data) {
   wkApplyingRemote = true;
-  state.wkEntries = data.entries || {};
+  // Anti-wipe guard (2026-07-15): a device running the original app version replaces
+  // this doc wholesale (its setDoc had no merge) with ITS empty entries every time it
+  // opens — this wiped all weekly data twice. An empty remote entries map while local
+  // has real days is therefore treated as that wipe and pushed back, NOT adopted.
+  // A deliberate "Clear all weekly data" is distinguished by the entriesWiped marker
+  // its replace writes (see wkPushToCloud) — guards stand down for it.
+  const remoteEntries = data.entries || {};
+  let antiWipeRestore = false;
+  if (wkCountDays(remoteEntries) === 0 && wkCountDays(state.wkEntries) > 0 && !data.entriesWiped) {
+    antiWipeRestore = true; // keep local entries; push them back below
+  } else {
+    state.wkEntries = remoteEntries;
+  }
   if (data.settings) {
     applyRemoteNames(data.settings);
     state.wkThresholds = data.settings.thresholds || state.wkThresholds;
@@ -44,6 +60,10 @@ function wkApplyRemoteData(data) {
   ui.renderAll();
   wkApplyingRemote = false;
   wkApplyFrozenFixes();
+  if (antiWipeRestore) {
+    console.warn('Weekly: remote entries empty but local has data — restoring (anti-wipe guard)');
+    wkPushToCloud();
+  }
 }
 
 export function wkSubscribeToCloud(code) {
@@ -74,11 +94,15 @@ export async function wkPushToCloud(opts = {}) {
   try {
     await ensureAuth();
     const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'trackers', coupleCode), {
+    const payload = {
       entries: state.wkEntries,
       settings: { ...syncableNames(), thresholds: state.wkThresholds },
       weeklyThresholds: state.wkWeeklyThresholds
-    }, writeOpts);
+    };
+    // Deliberate wipe (reset button): mark it so other devices' anti-wipe guard
+    // accepts the empty entries instead of restoring them.
+    if (opts.wipeMarker) payload.entriesWiped = Date.now();
+    await setDoc(doc(db, 'trackers', coupleCode), payload, writeOpts);
   } catch (err) {
     console.error(err);
     setSyncStatus('Sync error (weekly): could not save');
