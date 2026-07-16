@@ -264,10 +264,17 @@
   /* Bottom tab bar (phones only) — the pages are long, so navigation shouldn't
      require scrolling back to the top. Desktop keeps the top tabs. */
   .bottom-nav { display:none; }
-  #updateToast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:60; background:var(--card); border:1px solid var(--border-strong); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); padding:10px 14px; font-size:13px; align-items:center; gap:12px; max-width:calc(100vw - 32px); }
-  #updateToast.show { display:flex; }
+  #updateToast, #healthToast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:60; background:var(--card); border:1px solid var(--border-strong); border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); padding:10px 14px; font-size:13px; align-items:center; gap:12px; max-width:calc(100vw - 32px); }
+  #updateToast.show, #healthToast.show { display:flex; }
   #updateToast button.primary { width:auto; margin:0; padding:6px 14px; font-size:13px; }
-  #updateToast .toast-dismiss { background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 4px; line-height:1; }
+  #updateToast .toast-dismiss, #healthToast .toast-dismiss { background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:2px 4px; line-height:1; }
+
+  /* Barcode scanner overlay (calories tab) */
+  #scanOverlay { display:none; position:fixed; inset:0; z-index:70; background:rgba(0,0,0,0.88); flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px; }
+  #scanOverlay.open { display:flex; }
+  #scanVideo { width:100%; max-width:420px; border-radius:12px; background:#000; }
+  #scanHint { color:#fff; font-size:13px; margin:0; text-align:center; }
+  #scanOverlay button.primary { width:auto; }
   @media (max-width: 640px) {
     .main-tabs { display:none; }
     body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
@@ -276,7 +283,7 @@
     .bottom-nav button .bn-icon { font-size:18px; line-height:1.2; }
     .bottom-nav button.active { color:var(--accent); }
     .day-tabs { flex-wrap:wrap; overflow-x:visible; }
-    #updateToast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+    #updateToast, #healthToast { bottom: calc(72px + env(safe-area-inset-bottom)); }
   }
 
   /* Upgraded date pickers: display label + invisible native input overlay + Today chip */

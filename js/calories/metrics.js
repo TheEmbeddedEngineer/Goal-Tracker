@@ -73,16 +73,22 @@ function calRenderWeightHistory() {
   });
 }
 
-function calSaveWeight() {
-  const ds = document.getElementById('weightDate').value || todayStr();
-  const val = calRound2(parseFloat(document.getElementById('weightValue').value));
-  if (isNaN(val) || val <= 0) { alert('Enter a valid weight.'); return; }
-  if (!state.calWeightLog[state.calActivePerson]) state.calWeightLog[state.calActivePerson] = {};
-  state.calWeightLog[state.calActivePerson][ds] = val;
+// Shared by the manual save button and the Health-ingest URL path (see js/app.js) —
+// one code path, so ingested values get the exact same local/render/sync treatment.
+export function calLogWeight(pk, ds, kg) {
+  if (!state.calWeightLog[pk]) state.calWeightLog[pk] = {};
+  state.calWeightLog[pk][ds] = kg;
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(state.calWeightLog)); } catch (err) {}
   calRenderWeightCard();
   ui.renderTrendChart();
   calPushToCloud();
+}
+
+function calSaveWeight() {
+  const ds = document.getElementById('weightDate').value || todayStr();
+  const val = calRound2(parseFloat(document.getElementById('weightValue').value));
+  if (isNaN(val) || val <= 0) { alert('Enter a valid weight.'); return; }
+  calLogWeight(state.calActivePerson, ds, val);
 }
 
 function calLatestBurn(person) {
@@ -155,15 +161,20 @@ function calRenderBurnHistory() {
   });
 }
 
+// Same manual-save/Health-ingest split as calLogWeight above.
+export function calLogBurn(pk, ds, kcal) {
+  if (!state.calBurnLog[pk]) state.calBurnLog[pk] = {};
+  state.calBurnLog[pk][ds] = kcal;
+  try { localStorage.setItem('calorie_burnLog', JSON.stringify(state.calBurnLog)); } catch (err) {}
+  calRenderBurnCard();
+  calPushToCloud();
+}
+
 function calSaveBurn() {
   const ds = document.getElementById('burnDate').value || todayStr();
   const val = Math.round(parseFloat(document.getElementById('burnValue').value));
   if (isNaN(val) || val <= 0) { alert('Enter a valid calorie amount.'); return; }
-  if (!state.calBurnLog[state.calActivePerson]) state.calBurnLog[state.calActivePerson] = {};
-  state.calBurnLog[state.calActivePerson][ds] = val;
-  try { localStorage.setItem('calorie_burnLog', JSON.stringify(state.calBurnLog)); } catch (err) {}
-  calRenderBurnCard();
-  calPushToCloud();
+  calLogBurn(state.calActivePerson, ds, val);
 }
 
 // Deficit = calories burned (total daily expenditure) - calories eaten. Only counted for

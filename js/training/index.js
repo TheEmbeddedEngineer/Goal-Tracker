@@ -1,5 +1,6 @@
 import { TR_STREAK_MIN_LOGS, state, trCurrentPlan, trCurrentStreak, trLogsForDate, trWeekLogCount, ui } from './state.js';
 import { trApplyLegacyExerciseRenames, trPushToCloud, trSubscribeToCloud } from './sync.js';
+import { trLogStepsIfGoalMet } from './day.js';
 import { trRenderAll, trRenderContent, trRenderDayTabs, trRenderPersonTabs } from './render.js';
 import { feature, getMonday, register, saveActivePerson, todayStr } from '../core.js';
 import { DAY_ORDER, TR_EXTRA_ACTIVITIES } from '../data.js';
@@ -73,6 +74,8 @@ register('training', {
     trRenderAll();
   },
   onSettingsChanged: () => { trRenderPersonTabs(); trRenderDayTabs(); trRenderContent(); trPushToCloud(); },
+  // Health-ingest entry point (see js/app.js).
+  logStepsIfGoalMet: trLogStepsIfGoalMet,
   exportData: () => ({
     trainingLog: state.trTrainingLog, coreLog: state.trCoreLog,
     stepsCheckLog: state.trStepsCheckLog, extraLog: state.trExtraLog

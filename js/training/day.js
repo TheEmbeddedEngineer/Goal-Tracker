@@ -1,4 +1,4 @@
-import { state, trDayLogs, trExName, trExRow, trExpandedLogs, trFindLog, trFindPreviousLog, trLogKey, trRenderLogDetail, ui } from './state.js';
+import { TR_STEPS_GOAL, state, trDayLogs, trExName, trExRow, trExpandedLogs, trFindLog, trFindPreviousLog, trLogKey, trRenderLogDetail, ui } from './state.js';
 import { trPushToCloud } from './sync.js';
 import { buildTrendChart, feature, todayStr } from '../core.js';
 
@@ -193,6 +193,21 @@ export function trSaveStepsCheck() {
   else return;
   try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
   trPushToCloud({ skipMerge: !checked });
+}
+
+// Health-ingest path (see js/app.js): a step COUNT arrives from Apple Health; the
+// tracker itself only stores "goal reached" days, so check the day off when the
+// count clears TR_STEPS_GOAL. One-way — never unchecks. Returns whether it counted.
+export function trLogStepsIfGoalMet(pk, ds, count) {
+  if (!(count >= TR_STEPS_GOAL)) return false;
+  const arr = state.trStepsCheckLog[pk] || (state.trStepsCheckLog[pk] = []);
+  if (!arr.includes(ds)) {
+    arr.push(ds);
+    try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
+    trPushToCloud();
+    ui.renderContent();
+  }
+  return true;
 }
 
 export function trLoadExtraActivityCheckbox(activity) {

@@ -347,6 +347,30 @@ function calEditItem(index) {
   document.getElementById('bankStatus').textContent = 'Editing this entry — adjust values, then Update (or Cancel).';
 }
 
+// Fill the log form from a barcode-scanned Open Food Facts product (see scan.js).
+// If the food already exists in the bank, the bank's own values win — same
+// bank-first rule as the "Most logged" chips.
+export function calApplyScannedProduct(product) {
+  const name = ((product && (product.product_name_de || product.product_name)) || '').trim();
+  const statusEl = document.getElementById('bankStatus');
+  if (!name) { statusEl.textContent = 'Product found, but it has no name — enter it manually.'; return; }
+  const bankEntry = calFindInBank(name);
+  if (bankEntry) { calSelectBankEntry(bankEntry); return; }
+  const n = product.nutriments || {};
+  calEditingIndex = -1;
+  calActiveBankEntry = null;
+  document.getElementById('foodSearchInput').value = name;
+  calApplyUnit('gram');
+  document.getElementById('foodCalories').value = n['energy-kcal_100g'] != null ? Math.round(n['energy-kcal_100g']) : '';
+  document.getElementById('foodProtein').value = n.proteins_100g != null ? calRound2(n.proteins_100g) : '';
+  document.getElementById('foodCarbs').value = n.carbohydrates_100g != null ? calRound2(n.carbohydrates_100g) : '';
+  document.getElementById('foodFat').value = n.fat_100g != null ? calRound2(n.fat_100g) : '';
+  document.getElementById('addItemBtn').textContent = 'Add to log';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  calCloseDropdown();
+  statusEl.textContent = '✓ Scanned "' + name + '" — values per 100g from Open Food Facts. Set the amount and category, then Add.';
+}
+
 // Reuses the same good/inprogress/bad convention as the month calendar: a metric that's
 // not yet met still counts as "in progress" rather than "missed" while the day is today.
 function calRingStatus(ds, isMet) {

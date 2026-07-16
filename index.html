@@ -146,6 +146,7 @@
         <input type="checkbox" id="foodLocked" checked>
         <span>Locked (don't update food bank)</span>
       </label>
+      <button type="button" class="link-btn" id="scanBarcodeBtn" style="margin:-4px 8px 8px 0; padding:0; display:none;">&#128247; Scan a barcode</button>
       <button type="button" class="link-btn" id="googleSearchBtn" style="margin:-4px 0 8px; padding:0;">Not in our bank? Search on Google &rarr;</button>
       <button class="primary" id="addItemBtn">Add to log</button>
       <button type="button" class="link-btn" id="cancelEditBtn" style="display:none; width:100%; text-align:center;">Cancel edit</button>
@@ -265,6 +266,17 @@
   <span>A new version is available.</span>
   <button class="primary" id="updateReloadBtn">Refresh</button>
   <button type="button" class="toast-dismiss" id="updateDismissBtn" title="Dismiss">&times;</button>
+</div>
+
+<div id="healthToast">
+  <span></span>
+  <button type="button" class="toast-dismiss" id="healthToastClose" title="Dismiss">&times;</button>
+</div>
+
+<div id="scanOverlay">
+  <video id="scanVideo" playsinline muted></video>
+  <p id="scanHint">Point the camera at a barcode</p>
+  <button type="button" class="primary" id="scanCancelBtn">Cancel</button>
 </div>
 
 <script type="module">

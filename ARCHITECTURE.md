@@ -89,6 +89,8 @@ sanctioned way features consume each other (never a direct import):
 | `isDayGoalMet(pk, ds)` | calories → weekly | day logged AND calorie max + protein min met |
 | `isSessionOnDate(pk, ds)` | training → weekly | workout or extra activity logged that day |
 | `refreshAutoChecks()` | weekly ← calories/training | re-derive weekly auto-checks after day data changes |
+| `logBurn/logWeight(pk, ds, v)` | calories ← boot | Health-ingest URL params (same code path as manual save) |
+| `logStepsIfGoalMet(pk, ds, n)` | training ← boot | checks the steps day off when the count clears the goal |
 
 **Weekly auto-checks:** Sport ticks itself when a training session exists for a day;
 Nutrition ticks itself once a day has *ended* with its goals met. One-way (never
@@ -114,7 +116,9 @@ state.js   ◄──  sync.js  ◄──  UI file(s)  ◄──  index.js
 - **`sync.js`** — Firestore subscribe / merge / push for this feature.
 - **UI files** — weekly: `ui.js`; calories: `log.js` (daily food logging + autocomplete),
   `metrics.js` (weight/burn/deficit/goals), `bank.js` (food bank card), `insights.js`
-  (month calendar, recap, trends); training: `overview.js` (calendar + activities),
+  (month calendar, recap, trends), `scan.js` (camera barcode scanner → Open Food Facts
+  lookup → prefills the log form; button only rendered when the browser supports
+  BarcodeDetector + camera); training: `overview.js` (calendar + activities),
   `day.js` (day view, workout logging, progress), `render.js` (tab bars + content
   composition).
 - **`index.js`** — composes `renderAll`, registers with the core registry, and wires the
@@ -184,7 +188,11 @@ app renders instantly and works offline. Purely device-local settings never sync
 3. `feature(n).loadData()` for all three — render from localStorage immediately.
 4. `feature(n).subscribe(code)` — attach Firestore listeners.
 5. `showTab(...)` — restore last active tab (`?tab=` URL param wins).
-6. Register the service worker; wire the update toast.
+6. **Health ingest:** `?burn=…&steps=…&weight=…[&date=…]` URL params (sent by an iOS
+   Shortcut that reads Apple Health) are logged for the device owner through the same
+   feature code as the manual save buttons, confirmed with a toast, and stripped from
+   the URL immediately so a reload can't double-ingest.
+7. Register the service worker; wire the update toast.
 
 ## UI shell
 
