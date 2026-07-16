@@ -1,7 +1,7 @@
 import { calDayItems, calDayTotals, calGoalsForDay, calRefreshTopFoodsCache, state, ui } from './state.js';
 import { calEntriesCollectionQuery, calPushToCloud, calSubscribeToCloud, calSubscribeToEntriesCloud } from './sync.js';
 import { calPopulateCategorySelect, calRenderLogCard, calRenderRecentChips } from './log.js';
-import { calCumulativeDeficit, calLogBurn, calLogWeight, calPopulateGoalsInputs, calRenderBurnCard, calRenderDeficitCard, calRenderWeightCard } from './metrics.js';
+import { calCumulativeDeficit, calLogBurn, calLogBurnMany, calLogWeight, calPopulateGoalsInputs, calRenderBurnCard, calRenderDeficitCard, calRenderWeightCard } from './metrics.js';
 import { calRenderFoodBankList } from './bank.js';
 import { calRenderMonth, calRenderRecap, calRenderTrendChart } from './insights.js';
 import './scan.js';
@@ -141,6 +141,7 @@ register('calories', {
   onSettingsChanged: () => { calRenderPersonTabs(); calPopulateGoalsInputs(); calRenderAll(); calPushToCloud(); },
   // Health-ingest entry points (see js/app.js) — same code paths as the manual save buttons.
   logBurn: calLogBurn,
+  logBurnMany: calLogBurnMany,
   logWeight: calLogWeight,
   exportData: () => ({
     goals: state.calGoals, dailyGoals: state.calDailyGoals, entries: state.calEntries,

@@ -60,6 +60,22 @@ function parseHealthNumber(raw) {
   return parseFloat(s);
 }
 
+// A day series from the Shortcut's repeat loop: "2026-07-15,8250;2026-07-16,12040"
+// (ISO dates via Shortcuts' ISO-8601 formatting — locale-proof; values rounded).
+function parseHealthSeries(raw) {
+  const out = {};
+  if (!raw) return out;
+  String(raw).split(';').forEach(pair => {
+    const parts = pair.split(',');
+    if (parts.length < 2) return;
+    const ds = parts[0].trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return;
+    const v = parseHealthNumber(parts.slice(1).join(','));
+    if (!isNaN(v) && v >= 0) out[ds] = v;
+  });
+  return out;
+}
+
 (function ingestHealthParams() {
   let params;
   try { params = new URLSearchParams(window.location.search); } catch (err) { return; }
@@ -70,9 +86,18 @@ function parseHealthNumber(raw) {
     if (isNaN(v)) { unreadable.push(name + '="' + params.get(name) + '"'); return NaN; }
     return decimals ? Math.round(v * 100) / 100 : Math.round(v);
   };
+  const series = (name) => {
+    const raw = params.get(name);
+    if (raw == null) return {};
+    const s = parseHealthSeries(raw);
+    if (Object.keys(s).length === 0) unreadable.push(name + '="' + raw + '"');
+    return s;
+  };
   const burn = num('burn'), steps = num('steps'), weight = num('weight', true);
   const yburn = num('yburn'), ysteps = num('ysteps');
-  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && unreadable.length === 0) return;
+  const activeSeries = series('bactive'), restingSeries = series('bresting'), stepsSeries = series('hsteps');
+  const anySeries = [activeSeries, restingSeries, stepsSeries].some(s => Object.keys(s).length > 0);
+  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && !anySeries && unreadable.length === 0) return;
   const pk = loadDevicePerson() || 'p1';
   let ds = params.get('date') || todayStr();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || ds > todayStr()) ds = todayStr();
@@ -85,6 +110,32 @@ function parseHealthNumber(raw) {
     const met = feature('training').logStepsIfGoalMet(pk, d, n);
     done.push(n.toLocaleString() + ' steps ' + label + (met ? ' ✓' : ' (below goal, not checked)'));
   };
+  // Day series: burned = resting + active per COMPLETED day (today is still accruing);
+  // last-write-wins per day, same as a manual save.
+  const burnByDate = {};
+  Object.keys(activeSeries).sort().forEach(d => {
+    if (d < todayStr() && restingSeries[d] != null) {
+      const total = Math.round(activeSeries[d] + restingSeries[d]);
+      if (total > 0) burnByDate[d] = total;
+    }
+  });
+  const burnDays = Object.keys(burnByDate).sort();
+  if (burnDays.length > 0) {
+    feature('calories').logBurnMany(pk, burnByDate);
+    const latest = burnDays[burnDays.length - 1];
+    done.push('burned kcal for ' + burnDays.length + ' day' + (burnDays.length === 1 ? '' : 's')
+      + ', latest ' + latest + ': ' + burnByDate[latest].toLocaleString());
+  }
+  if (Object.keys(stepsSeries).length > 0) {
+    if (pk === 'p1') {
+      const res = feature('training').logStepsFromCounts(pk, stepsSeries);
+      done.push(res.checked.length > 0
+        ? 'steps goal ✓ ' + res.checked.join(', ')
+        : 'steps: no day at 10,000+ yet');
+    } else {
+      done.push('steps (steps tracking is p1-only)');
+    }
+  }
   if (yburn > 0) { feature('calories').logBurn(pk, yds, yburn); done.push(yburn.toLocaleString() + ' kcal burned (' + yds + ')'); }
   if (burn > 0) { feature('calories').logBurn(pk, ds, burn); done.push(burn.toLocaleString() + ' kcal burned'); }
   if (weight > 0) { feature('calories').logWeight(pk, ds, weight); done.push(weight + ' kg'); }
@@ -97,7 +148,7 @@ function parseHealthNumber(raw) {
     const keep = params.get('tab') ? '?tab=' + encodeURIComponent(params.get('tab')) : '';
     history.replaceState(null, '', window.location.pathname + keep);
   } catch (err) {}
-  showTab(burn > 0 || weight > 0 ? 'calories' : 'training');
+  showTab(burn > 0 || weight > 0 || yburn > 0 || burnDays.length > 0 ? 'calories' : 'training');
   const toast = document.getElementById('healthToast');
   if (toast) {
     const name = pk === 'p1' ? sharedSettings.p1 : sharedSettings.p2;

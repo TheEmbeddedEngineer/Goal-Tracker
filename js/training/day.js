@@ -210,6 +210,29 @@ export function trLogStepsIfGoalMet(pk, ds, count) {
   return true;
 }
 
+// Batch variant for the Health-ingest day series ({date: count}): applies the goal
+// threshold per day, one push for everything. Returns which days got checked and
+// which stayed below the goal.
+export function trLogStepsFromCounts(pk, byDate) {
+  const arr = state.trStepsCheckLog[pk] || (state.trStepsCheckLog[pk] = []);
+  const checked = [], below = [];
+  let changed = false;
+  Object.keys(byDate).sort().forEach(ds => {
+    if (byDate[ds] >= TR_STEPS_GOAL) {
+      checked.push(ds);
+      if (!arr.includes(ds)) { arr.push(ds); changed = true; }
+    } else {
+      below.push(ds);
+    }
+  });
+  if (changed) {
+    try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
+    trPushToCloud();
+    ui.renderContent();
+  }
+  return { checked, below };
+}
+
 export function trLoadExtraActivityCheckbox(activity) {
   const dateInput = document.querySelector(`.extra-activity-date[data-activity="${activity}"]`);
   const checkbox = document.querySelector(`.extra-activity-checkbox[data-activity="${activity}"]`);

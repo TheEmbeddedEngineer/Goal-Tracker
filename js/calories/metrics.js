@@ -177,6 +177,18 @@ function calSaveBurn() {
   calLogBurn(state.calActivePerson, ds, val);
 }
 
+// Batch variant for the Health-ingest day series: all days set locally first, then
+// ONE push — instead of one full push round trip per day.
+export function calLogBurnMany(pk, byDate) {
+  const dates = Object.keys(byDate);
+  if (dates.length === 0) return;
+  if (!state.calBurnLog[pk]) state.calBurnLog[pk] = {};
+  dates.forEach(ds => { state.calBurnLog[pk][ds] = byDate[ds]; });
+  try { localStorage.setItem('calorie_burnLog', JSON.stringify(state.calBurnLog)); } catch (err) {}
+  calRenderBurnCard();
+  calPushToCloud();
+}
+
 // Deficit = calories burned (total daily expenditure) - calories eaten. Only counted for
 // days that have BOTH a burn entry and logged food — without both, there's nothing
 // meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
