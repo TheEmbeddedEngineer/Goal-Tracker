@@ -1,6 +1,6 @@
 import { calCurrentStreak, calDayItems, calDayTotals, calFindInBank, calGoalsForDay, calMonthKey, calNormName, calSearchBank, calSelectedDate, state, ui } from './state.js';
 import { calPushEntriesForMonth, calPushToCloud } from './sync.js';
-import { calRound2, esc, todayStr } from '../core.js';
+import { calRound2, esc, feature, todayStr } from '../core.js';
 import { CAL_CATEGORIES } from '../data.js';
 
 export function calPopulateCategorySelect() {
@@ -269,6 +269,8 @@ async function calAddItem() {
   // local result rather than merging — a stale remote copy could otherwise resurrect
   // the pre-edit/pre-merge version alongside the new one.
   calPushEntriesForMonth(calMonthKey(ds), { skipMerge: wasEditing || mergedIntoExisting });
+  // A past day's log may just have crossed (or been edited across) the goal line.
+  feature('weekly').refreshAutoChecks();
 }
 
 function calDeleteItem(index) {

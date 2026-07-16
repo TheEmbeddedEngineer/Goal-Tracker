@@ -97,6 +97,14 @@ register('calories', {
   subscribe: (code) => { calSubscribeToCloud(code); calSubscribeToEntriesCloud(code); },
   renderAll: calRenderAll,
   isDoneToday: (pk) => calDayItems(pk, todayStr()).length > 0,
+  // For the weekly tab's Nutrition auto-check: a day with food logged that met both
+  // the calorie max and protein min (against the goals frozen for that day).
+  isDayGoalMet: (pk, ds) => {
+    if (calDayItems(pk, ds).length === 0) return false;
+    const totals = calDayTotals(pk, ds);
+    const goal = calGoalsForDay(ds)[pk];
+    return totals.calories <= goal.calories && totals.protein >= goal.protein;
+  },
   glanceHtml: () => {
     const pk = state.calActivePerson;
     const ds = todayStr();

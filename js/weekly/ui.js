@@ -1,6 +1,6 @@
-import { CATS, DAY_LABELS, EARLIEST_VISIBLE_WEEK, state } from './state.js';
+import { CATS, DAY_LABELS, EARLIEST_VISIBLE_WEEK, WK_AUTOCHECK_START, state } from './state.js';
 import { wkPushToCloud } from './sync.js';
-import { confirmWipe, dstr, getMonday, parseDate, saveActivePerson, todayStr } from '../core.js';
+import { confirmWipe, dstr, feature, getMonday, parseDate, saveActivePerson, todayStr } from '../core.js';
 import { renderGlanceBar, renderTodayCard, sharedSettings } from '../shared.js';
 
 function fmtDate(s) { return parseDate(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
@@ -151,6 +151,41 @@ export function wkRenderAll() {
   wkRenderThisWeek();
   wkRenderHistory();
   renderTodayCard();
+}
+
+// Auto-check Nutrition/Sport from the other two trackers (via the registry — never a
+// direct feature import): Sport once a workout or extra activity is logged for a day,
+// Nutrition once a day has ENDED with the calorie+protein goals met (today can't tick
+// early — more eating could still break the goal, same "today isn't over" convention as
+// the rest of the app). One-way: this only ever sets a checkmark, never clears one, and
+// never before WK_AUTOCHECK_START. Screen time stays manual. Idempotent; pushes only
+// when something actually changed.
+export function wkRefreshAutoChecks() {
+  const cal = feature('calories');
+  const tr = feature('training');
+  if (!cal || !cal.isDayGoalMet || !tr || !tr.isSessionOnDate) return;
+  const today = todayStr();
+  let changed = false;
+  ['p1', 'p2'].forEach(pk => {
+    for (let i = 0; i < 21; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const ds = dstr(d);
+      if (ds < WK_AUTOCHECK_START) break;
+      const wantNutrition = ds < today && cal.isDayGoalMet(pk, ds);
+      const wantSport = tr.isSessionOnDate(pk, ds);
+      if (!wantNutrition && !wantSport) continue;
+      const person = state.wkEntries[pk] || (state.wkEntries[pk] = {});
+      const day = person[ds] || (person[ds] = { nutrition: false, screen: false, sport: false });
+      if (wantNutrition && !day.nutrition) { day.nutrition = true; changed = true; }
+      if (wantSport && !day.sport) { day.sport = true; changed = true; }
+    }
+  });
+  if (changed) {
+    try { localStorage.setItem('entries', JSON.stringify(state.wkEntries)); } catch (err) {}
+    wkLoadCheckboxesForDate();
+    wkRenderAll();
+    wkPushToCloud();
+  }
 }
 
 function wkRenderThisWeek() {

@@ -60,6 +60,7 @@ function wkApplyRemoteData(data) {
   ui.renderAll();
   wkApplyingRemote = false;
   wkApplyFrozenFixes();
+  ui.refreshAutoChecks();
   if (antiWipeRestore) {
     console.warn('Weekly: remote entries empty but local has data — restoring (anti-wipe guard)');
     wkPushToCloud();

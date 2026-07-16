@@ -20,3 +20,6 @@ export const ui = {};
 export const CATS = [['nutrition','Nutrition'],['screen','Screen time'],['sport','Sport']];
 export const DAY_LABELS = ['M','T','W','T','F','S','S'];
 export const EARLIEST_VISIBLE_WEEK = '2026-06-29';
+// Auto-checks from the other trackers (see wkRefreshAutoChecks) never touch days
+// before this — the feature shipped 2026-07-16 and must not rewrite finished weeks.
+export const WK_AUTOCHECK_START = '2026-07-15';

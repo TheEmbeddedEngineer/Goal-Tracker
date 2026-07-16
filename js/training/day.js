@@ -1,6 +1,6 @@
 import { state, trDayLogs, trExName, trExRow, trExpandedLogs, trFindLog, trFindPreviousLog, trLogKey, trRenderLogDetail, ui } from './state.js';
 import { trPushToCloud } from './sync.js';
-import { buildTrendChart, todayStr } from '../core.js';
+import { buildTrendChart, feature, todayStr } from '../core.js';
 
 export function trRenderDay(day, dayKey) {
   const hasVariants = !!(day.gym && day.home);
@@ -137,6 +137,7 @@ export function trSaveLog(dayKey, list, variant) {
   }, 2600);
   trPushToCloud();
   ui.renderContent();
+  feature('weekly').refreshAutoChecks();
 }
 
 export function trDeleteLog(dayKey, date, variant) {
@@ -218,6 +219,7 @@ export function trSaveExtraActivity(activity) {
   else return;
   try { localStorage.setItem('training_extraLog', JSON.stringify(state.trExtraLog)); } catch (err) {}
   trPushToCloud({ skipMerge: !checked });
+  if (checked) feature('weekly').refreshAutoChecks();
 }
 
 export function trRenderBackCare(bc) {

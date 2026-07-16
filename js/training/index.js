@@ -1,7 +1,7 @@
 import { TR_STREAK_MIN_LOGS, state, trCurrentPlan, trCurrentStreak, trLogsForDate, trWeekLogCount, ui } from './state.js';
 import { trApplyLegacyExerciseRenames, trPushToCloud, trSubscribeToCloud } from './sync.js';
 import { trRenderAll, trRenderContent, trRenderDayTabs, trRenderPersonTabs } from './render.js';
-import { getMonday, register, saveActivePerson, todayStr } from '../core.js';
+import { feature, getMonday, register, saveActivePerson, todayStr } from '../core.js';
 import { DAY_ORDER, TR_EXTRA_ACTIVITIES } from '../data.js';
 
 function trLoadData() {
@@ -31,6 +31,9 @@ function trLoadData() {
 
   trRenderAll();
   trApplyLegacyExerciseRenames();
+  // Training is the last feature to load (see js/app.js order), so all three features'
+  // local data is in memory here — first chance to derive the weekly auto-checks.
+  feature('weekly').refreshAutoChecks();
 }
 
 register('training', {
@@ -40,6 +43,11 @@ register('training', {
   isDoneToday: (pk) => trLogsForDate(pk, todayStr()).length > 0 || (state.trCoreLog[pk] || []).includes(todayStr())
     || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((state.trExtraLog[pk] || {})[act] || []).includes(todayStr()))
     || (pk === 'p1' && (state.trStepsCheckLog.p1 || []).includes(todayStr())),
+  // For the weekly tab's Sport auto-check: a real standalone session — a logged workout
+  // or an extra activity (Tennis/Hyrox/Runs). Core stability and the steps checkbox
+  // deliberately don't count, same rule as trWeekLogCount.
+  isSessionOnDate: (pk, ds) => trLogsForDate(pk, ds).length > 0
+    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((state.trExtraLog[pk] || {})[act] || []).includes(ds)),
   glanceHtml: () => {
     const pk = state.trActivePerson;
     const n = trWeekLogCount(pk, getMonday(new Date()));

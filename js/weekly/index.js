@@ -1,6 +1,6 @@
 import { CATS, state, ui } from './state.js';
 import { wkApplyFrozenFixes, wkPushToCloud, wkSubscribeToCloud } from './sync.js';
-import { wkCatCountsForWeek, wkCurrentStreak, wkLoadCheckboxesForDate, wkRenderAll, wkRenderPersonTabs, wkThresholdsForWeek } from './ui.js';
+import { wkCatCountsForWeek, wkCurrentStreak, wkLoadCheckboxesForDate, wkRefreshAutoChecks, wkRenderAll, wkRenderPersonTabs, wkThresholdsForWeek } from './ui.js';
 import { getMonday, register, saveActivePerson, todayStr } from '../core.js';
 
 function wkLoadData() {
@@ -61,11 +61,15 @@ register('weekly', {
     wkRenderAll();
   },
   onSettingsChanged: () => { wkRenderPersonTabs(); wkRenderAll(); wkPushToCloud(); },
+  // Called by calories/training (via the registry) whenever their day data changes —
+  // NOT from weekly's own loadData, which runs before the other features have loaded.
+  refreshAutoChecks: wkRefreshAutoChecks,
   exportData: () => ({ entries: state.wkEntries, weeklyThresholds: state.wkWeeklyThresholds })
 });
 
 // Wire the late-bound slots (see state.js) now that everything is defined.
 ui.loadCheckboxesForDate = wkLoadCheckboxesForDate;
+ui.refreshAutoChecks = wkRefreshAutoChecks;
 ui.renderAll = wkRenderAll;
 ui.renderPersonTabs = wkRenderPersonTabs;
 

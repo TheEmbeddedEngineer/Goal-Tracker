@@ -81,6 +81,21 @@ Each tracker registers this API:
 | `onSettingsChanged()` | names/settings saves |
 | `exportData()` | backup JSON download |
 
+A few feature-specific registry methods exist beyond the common API — this is the
+sanctioned way features consume each other (never a direct import):
+
+| Method | Provider → consumer | Purpose |
+|---|---|---|
+| `isDayGoalMet(pk, ds)` | calories → weekly | day logged AND calorie max + protein min met |
+| `isSessionOnDate(pk, ds)` | training → weekly | workout or extra activity logged that day |
+| `refreshAutoChecks()` | weekly ← calories/training | re-derive weekly auto-checks after day data changes |
+
+**Weekly auto-checks:** Sport ticks itself when a training session exists for a day;
+Nutrition ticks itself once a day has *ended* with its goals met. One-way (never
+unchecks), never before `WK_AUTOCHECK_START`, idempotent, pushes only on change.
+The trigger sites are the data-change points in calories/training (saves, deletes,
+remote applies, last-feature load) — deliberately not render paths.
+
 Rules: shared/core never import a feature; features never import each other. New
 cross-feature needs = extend the registered API, not a new import.
 

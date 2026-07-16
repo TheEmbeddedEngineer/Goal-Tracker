@@ -1,5 +1,5 @@
 import { state, ui } from './state.js';
-import { coupleCode, db, doc, ensureAuth, getDoc, markSynced, onSnapshot, setDoc, setSyncStatus } from '../core.js';
+import { coupleCode, db, doc, ensureAuth, feature, getDoc, markSynced, onSnapshot, setDoc, setSyncStatus } from '../core.js';
 import { TR_EXERCISE_RENAMES } from '../data.js';
 import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
@@ -45,6 +45,7 @@ function trApplyRemoteData(data) {
   ui.renderAll();
   trApplyingRemote = false;
   trApplyLegacyExerciseRenames();
+  feature('weekly').refreshAutoChecks();
 }
 
 export function trSubscribeToCloud(code) {

@@ -1,5 +1,5 @@
 import { calItemKey, calMonthKey, calRefreshTopFoodsCache, monthKey, state, ui } from './state.js';
-import { collection, coupleCode, db, deleteField, doc, documentId, ensureAuth, getDoc, markSynced, onSnapshot, query, setDoc, setSyncStatus, where } from '../core.js';
+import { collection, coupleCode, db, deleteField, doc, documentId, ensureAuth, feature, getDoc, markSynced, onSnapshot, query, setDoc, setSyncStatus, where } from '../core.js';
 import { applyRemoteNames, applySharedSettingsToInputs, sharedSettings, syncableNames } from '../shared.js';
 
 let calUnsub = null;
@@ -118,6 +118,7 @@ export function calSubscribeToEntriesCloud(code) {
       calRefreshTopFoodsCache();
       ui.renderAll();
       calApplyingRemote = false;
+      feature('weekly').refreshAutoChecks();
       markSynced('calorieEntries');
     }, (err) => {
       console.error(err);
