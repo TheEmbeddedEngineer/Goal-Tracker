@@ -102,6 +102,18 @@ function trMergeExtraLog(localObj, remoteObj) {
 
 export async function trPushToCloud(opts = {}) {
   if (!coupleCode || trApplyingRemote) return;
+  // Capture the local data SYNCHRONOUSLY, before any await: a remote snapshot arriving
+  // while this push is in flight reassigns the state objects, and reading them after
+  // the awaits would silently drop the log that was just saved (same in-flight race
+  // as calPushToCloud — see there). Merging below operates on these captured
+  // references, and the result is written back into live state for convergence.
+  const payload = {
+    settings: syncableNames(),
+    trainingLog: { p1: state.trTrainingLog.p1, p2: state.trTrainingLog.p2 },
+    coreLog: { p1: state.trCoreLog.p1, p2: state.trCoreLog.p2 },
+    extraLog: { p1: state.trExtraLog.p1, p2: state.trExtraLog.p2 },
+    stepsCheckLog: { p1: state.trStepsCheckLog.p1, p2: state.trStepsCheckLog.p2 }
+  };
   try {
     await ensureAuth();
     if (!opts.skipMerge) {
@@ -109,25 +121,23 @@ export async function trPushToCloud(opts = {}) {
         const snap = await getDoc(doc(db, 'training', coupleCode));
         if (snap.exists()) {
           const remote = snap.data();
-          state.trTrainingLog.p1 = trMergeLogArray(state.trTrainingLog.p1, remote.trainingLog && remote.trainingLog.p1);
-          state.trTrainingLog.p2 = trMergeLogArray(state.trTrainingLog.p2, remote.trainingLog && remote.trainingLog.p2);
-          state.trCoreLog.p1 = trMergeCoreLog(state.trCoreLog.p1, remote.coreLog && remote.coreLog.p1);
-          state.trCoreLog.p2 = trMergeCoreLog(state.trCoreLog.p2, remote.coreLog && remote.coreLog.p2);
-          state.trExtraLog.p1 = trMergeExtraLog(state.trExtraLog.p1, remote.extraLog && remote.extraLog.p1);
-          state.trExtraLog.p2 = trMergeExtraLog(state.trExtraLog.p2, remote.extraLog && remote.extraLog.p2);
-          state.trStepsCheckLog.p1 = trMergeCoreLog(state.trStepsCheckLog.p1, remote.stepsCheckLog && remote.stepsCheckLog.p1);
-          state.trStepsCheckLog.p2 = trMergeCoreLog(state.trStepsCheckLog.p2, remote.stepsCheckLog && remote.stepsCheckLog.p2);
+          payload.trainingLog.p1 = trMergeLogArray(payload.trainingLog.p1, remote.trainingLog && remote.trainingLog.p1);
+          payload.trainingLog.p2 = trMergeLogArray(payload.trainingLog.p2, remote.trainingLog && remote.trainingLog.p2);
+          payload.coreLog.p1 = trMergeCoreLog(payload.coreLog.p1, remote.coreLog && remote.coreLog.p1);
+          payload.coreLog.p2 = trMergeCoreLog(payload.coreLog.p2, remote.coreLog && remote.coreLog.p2);
+          payload.extraLog.p1 = trMergeExtraLog(payload.extraLog.p1, remote.extraLog && remote.extraLog.p1);
+          payload.extraLog.p2 = trMergeExtraLog(payload.extraLog.p2, remote.extraLog && remote.extraLog.p2);
+          payload.stepsCheckLog.p1 = trMergeCoreLog(payload.stepsCheckLog.p1, remote.stepsCheckLog && remote.stepsCheckLog.p1);
+          payload.stepsCheckLog.p2 = trMergeCoreLog(payload.stepsCheckLog.p2, remote.stepsCheckLog && remote.stepsCheckLog.p2);
+          state.trTrainingLog = payload.trainingLog;
+          state.trCoreLog = payload.coreLog;
+          state.trExtraLog = payload.extraLog;
+          state.trStepsCheckLog = payload.stepsCheckLog;
         }
       } catch (err) { console.error('Could not merge remote training log before push:', err); }
     }
     const writeOpts = opts.replace ? {} : { merge: true };
-    await setDoc(doc(db, 'training', coupleCode), {
-      settings: syncableNames(),
-      trainingLog: state.trTrainingLog,
-      coreLog: state.trCoreLog,
-      extraLog: state.trExtraLog,
-      stepsCheckLog: state.trStepsCheckLog
-    }, writeOpts);
+    await setDoc(doc(db, 'training', coupleCode), payload, writeOpts);
     try { localStorage.setItem('training_log', JSON.stringify(state.trTrainingLog)); } catch (err) {}
     try { localStorage.setItem('training_coreLog', JSON.stringify(state.trCoreLog)); } catch (err) {}
     try { localStorage.setItem('training_extraLog', JSON.stringify(state.trExtraLog)); } catch (err) {}

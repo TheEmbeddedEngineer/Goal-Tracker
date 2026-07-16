@@ -159,9 +159,12 @@ export async function calPushEntriesForMonth(monthKey, opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
   const ref = calEntryDocRef(coupleCode, monthKey);
   const usingExplicitSource = !!opts.sourceEntries;
+  // Slice captured SYNCHRONOUSLY before any await — the entries listener reassigns
+  // state.calEntries wholesale, and a slice taken after the awaits would drop an
+  // item that was just added (same in-flight race as calPushToCloud above).
+  let slice = calEntriesSliceForMonth(monthKey, opts.sourceEntries);
   try {
     await ensureAuth();
-    let slice = calEntriesSliceForMonth(monthKey, opts.sourceEntries);
     if (!opts.skipMerge) {
       try {
         const snap = await getDoc(ref);
@@ -195,6 +198,19 @@ async function calPushEntriesForDates(dates) {
 
 export async function calPushToCloud(opts = {}) {
   if (!coupleCode || calApplyingRemote) return;
+  // Capture the payload SYNCHRONOUSLY, before any await: a remote snapshot arriving
+  // while this push is in flight reassigns state.calWeightLog/calBurnLog/etc., and a
+  // payload built after the awaits would silently drop the value that was just saved
+  // (this bit the Health ingest, which always races the boot-time first snapshot).
+  // The captured references keep pointing at the pre-snapshot objects, so the saved
+  // value reaches Firestore and the echo snapshot brings it back into live state.
+  const payload = {
+    settings: { ...syncableNames(), goals: state.calGoals },
+    dailyGoals: state.calDailyGoals,
+    foodBank: state.calFoodBank,
+    weightLog: state.calWeightLog,
+    burnLog: state.calBurnLog
+  };
   try {
     await ensureAuth();
     // calMergeFoodBank unions by name, so it can't tell "removed locally" apart from
@@ -203,17 +219,13 @@ export async function calPushToCloud(opts = {}) {
     if (!opts.skipMerge) {
       try {
         const snap = await getDoc(doc(db, 'calories', coupleCode));
-        if (snap.exists()) calMergeFoodBank(snap.data().foodBank);
+        if (snap.exists()) {
+          calMergeFoodBank(snap.data().foodBank);
+          payload.foodBank = state.calFoodBank;
+        }
       } catch (err) { console.error('Could not merge remote data before push:', err); }
     }
     const writeOpts = opts.replace ? {} : { merge: true };
-    const payload = {
-      settings: { ...syncableNames(), goals: state.calGoals },
-      dailyGoals: state.calDailyGoals,
-      foodBank: state.calFoodBank,
-      weightLog: state.calWeightLog,
-      burnLog: state.calBurnLog
-    };
     // One-time cleanup: the old schema kept every food log entry ever logged inside this
     // same document, which is what drove it toward Firestore's 1 MiB limit in the first
     // place (see calMonthKey above) — once legacy entries have been migrated out to

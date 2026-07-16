@@ -92,17 +92,21 @@ export function wkSubscribeToCloud(code) {
 
 export async function wkPushToCloud(opts = {}) {
   if (!coupleCode || wkApplyingRemote) return;
+  // Capture the payload SYNCHRONOUSLY, before any await: a remote snapshot arriving
+  // while this push is in flight reassigns the state objects, and a payload built
+  // after the awaits would silently drop whatever was just saved (the July-12 lesson:
+  // never re-read mutable shared state after an await).
+  const payload = {
+    entries: state.wkEntries,
+    settings: { ...syncableNames(), thresholds: state.wkThresholds },
+    weeklyThresholds: state.wkWeeklyThresholds
+  };
+  // Deliberate wipe (reset button): mark it so other devices' anti-wipe guard
+  // accepts the empty entries instead of restoring them.
+  if (opts.wipeMarker) payload.entriesWiped = Date.now();
   try {
     await ensureAuth();
     const writeOpts = opts.replace ? {} : { merge: true };
-    const payload = {
-      entries: state.wkEntries,
-      settings: { ...syncableNames(), thresholds: state.wkThresholds },
-      weeklyThresholds: state.wkWeeklyThresholds
-    };
-    // Deliberate wipe (reset button): mark it so other devices' anti-wipe guard
-    // accepts the empty entries instead of restoring them.
-    if (opts.wipeMarker) payload.entriesWiped = Date.now();
     await setDoc(doc(db, 'trackers', coupleCode), payload, writeOpts);
   } catch (err) {
     console.error(err);
