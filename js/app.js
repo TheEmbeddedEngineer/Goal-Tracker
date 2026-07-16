@@ -1,6 +1,6 @@
 // Boot order: core/shared/features have already run their top-level setup by the
 // time this executes (import order below). This file only sequences startup.
-import { feature, coupleCode, loadDevicePerson, setSyncStatus, todayStr } from './core.js';
+import { dstr, feature, coupleCode, loadDevicePerson, setSyncStatus, todayStr } from './core.js';
 import { initShared, sharedSettings, showTab } from './shared.js';
 import './weekly/index.js';
 import './calories/index.js';
@@ -24,32 +24,42 @@ try {
 } catch (err) {}
 showTab(initialTab);
 
-// Health ingest: an iOS Shortcut reads Apple Health (active energy, steps, latest
-// weight) and opens the app as ?burn=2650&steps=12040&weight=91.8[&date=YYYY-MM-DD].
-// Values are logged for the DEVICE OWNER through the same feature code as the manual
-// save buttons (all sync/merge safety applies). The ingest params are stripped from
-// the URL immediately so a reload can never double-ingest.
+// Health ingest: an iOS Shortcut reads Apple Health and opens the app with values in
+// the URL. Two families of params, all optional and combinable:
+//   Today-dated (or &date=YYYY-MM-DD): ?burn=2650&steps=12040&weight=91.8
+//   Yesterday-dated (the app computes yesterday itself): ?yburn=3100&ysteps=8540
+// The daily automation sends yburn (resting+active energy of the completed day),
+// ysteps and steps — so yesterday's deficit is exact and both days' step goals get
+// their checkmark. Values are logged for the DEVICE OWNER through the same feature
+// code as the manual save buttons (all sync/merge safety applies). The ingest params
+// are stripped from the URL immediately so a reload can never double-ingest.
 (function ingestHealthParams() {
   let params;
   try { params = new URLSearchParams(window.location.search); } catch (err) { return; }
-  const burn = Math.round(parseFloat(params.get('burn')));
-  const steps = Math.round(parseFloat(params.get('steps')));
-  const weight = Math.round(parseFloat(params.get('weight')) * 100) / 100;
-  if (!(burn > 0) && !(steps > 0) && !(weight > 0)) return;
+  const num = (name, decimals) => {
+    const v = parseFloat(params.get(name));
+    return decimals ? Math.round(v * 100) / 100 : Math.round(v);
+  };
+  const burn = num('burn'), steps = num('steps'), weight = num('weight', true);
+  const yburn = num('yburn'), ysteps = num('ysteps');
+  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0)) return;
   const pk = loadDevicePerson() || 'p1';
   let ds = params.get('date') || todayStr();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || ds > todayStr()) ds = todayStr();
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yds = dstr(y);
   const done = [];
+  const logSteps = (d, n) => {
+    const label = d === todayStr() ? 'today' : d;
+    if (pk !== 'p1') { done.push(n.toLocaleString() + ' steps (steps tracking is p1-only)'); return; }
+    const met = feature('training').logStepsIfGoalMet(pk, d, n);
+    done.push(n.toLocaleString() + ' steps ' + label + (met ? ' ✓' : ' (below goal, not checked)'));
+  };
+  if (yburn > 0) { feature('calories').logBurn(pk, yds, yburn); done.push(yburn.toLocaleString() + ' kcal burned (' + yds + ')'); }
   if (burn > 0) { feature('calories').logBurn(pk, ds, burn); done.push(burn.toLocaleString() + ' kcal burned'); }
   if (weight > 0) { feature('calories').logWeight(pk, ds, weight); done.push(weight + ' kg'); }
-  if (steps > 0) {
-    if (pk === 'p1') {
-      const met = feature('training').logStepsIfGoalMet(pk, ds, steps);
-      done.push(steps.toLocaleString() + ' steps' + (met ? ' ✓' : ' (below goal, not checked)'));
-    } else {
-      done.push(steps.toLocaleString() + ' steps (steps tracking is p1-only)');
-    }
-  }
+  if (ysteps > 0) logSteps(yds, ysteps);
+  if (steps > 0) logSteps(ds, steps);
   try {
     const keep = params.get('tab') ? '?tab=' + encodeURIComponent(params.get('tab')) : '';
     history.replaceState(null, '', window.location.pathname + keep);
