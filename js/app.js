@@ -60,6 +60,37 @@ function parseHealthNumber(raw) {
   return parseFloat(s);
 }
 
+// A date in whatever format the device locale stringifies Shortcuts dates to:
+// ISO "2026-07-16", German "16.07.2026[, 09:41]", or US "7/16/2026" — normalized to ISO.
+function parseHealthDate(raw) {
+  const s = String(raw).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0');
+  return null;
+}
+
+// Two parallel ';'-joined lists (dates and values) from the loop-free Shortcut:
+// Get Details of Health Samples applied to the whole grouped-by-day list yields the
+// bucket dates and values in the same order — zip them into {isoDate: value}.
+// Values may carry units and locale formatting ("8.250 Schritte") — parsed defensively.
+function parseZippedSeries(datesRaw, valsRaw) {
+  const out = {};
+  if (!datesRaw || !valsRaw) return out;
+  const dates = String(datesRaw).split(';');
+  const vals = String(valsRaw).split(';');
+  const n = Math.min(dates.length, vals.length);
+  for (let i = 0; i < n; i++) {
+    const ds = parseHealthDate(dates[i]);
+    const v = parseHealthNumber(vals[i]);
+    if (ds && !isNaN(v) && v >= 0) out[ds] = (out[ds] || 0) + v;
+  }
+  return out;
+}
+
 // A day series from the Shortcut's repeat loop: "2026-07-15,8250;2026-07-16,12040"
 // (ISO dates via Shortcuts' ISO-8601 formatting — locale-proof; values rounded).
 function parseHealthSeries(raw) {
@@ -93,9 +124,18 @@ function parseHealthSeries(raw) {
     if (Object.keys(s).length === 0) unreadable.push(name + '="' + raw + '"');
     return s;
   };
+  const zip = (dName, vName, label) => {
+    const dr = params.get(dName), vr = params.get(vName);
+    if (dr == null && vr == null) return {};
+    const s = parseZippedSeries(dr, vr);
+    if (Object.keys(s).length === 0) unreadable.push(label + '="' + (dr || '') + '" / "' + (vr || '') + '"');
+    return s;
+  };
   const burn = num('burn'), steps = num('steps'), weight = num('weight', true);
   const yburn = num('yburn'), ysteps = num('ysteps');
-  const activeSeries = series('bactive'), restingSeries = series('bresting'), stepsSeries = series('hsteps');
+  const activeSeries = { ...series('bactive'), ...zip('adates', 'avals', 'active') };
+  const restingSeries = { ...series('bresting'), ...zip('rdates', 'rvals', 'resting') };
+  const stepsSeries = { ...series('hsteps'), ...zip('sdates', 'svals', 'steps') };
   const anySeries = [activeSeries, restingSeries, stepsSeries].some(s => Object.keys(s).length > 0);
   if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && !anySeries && unreadable.length === 0) return;
   const pk = loadDevicePerson() || 'p1';
