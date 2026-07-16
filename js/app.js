@@ -61,7 +61,17 @@ function parseHealthNumber(raw) {
 }
 
 // A date in whatever format the device locale stringifies Shortcuts dates to:
-// ISO "2026-07-16", German "16.07.2026[, 09:41]", or US "7/16/2026" — normalized to ISO.
+// ISO "2026-07-16", numeric German "16.07.2026[, 09:41]", US "7/16/2026", or textual
+// German/English ("16. Juli 2026 um 09:41", "Mittwoch, 16. Juli 2026", "Jul 16, 2026")
+// — normalized to ISO. Weekday prefixes and trailing times are ignored.
+const HEALTH_MONTHS = {
+  januar: 1, februar: 2, 'märz': 3, maerz: 3, april: 4, mai: 5, juni: 6, juli: 7,
+  august: 8, september: 9, oktober: 10, november: 11, dezember: 12,
+  jan: 1, feb: 2, 'mär': 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9,
+  okt: 10, nov: 11, dez: 12,
+  january: 1, february: 2, march: 3, may: 5, june: 6, july: 7, october: 10,
+  december: 12, mar: 3, oct: 10, dec: 12
+};
 function parseHealthDate(raw) {
   const s = String(raw).trim();
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -70,6 +80,18 @@ function parseHealthDate(raw) {
   if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) return m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0');
+  // "16. Juli 2026", with or without weekday prefix / trailing time (not anchored)
+  m = s.match(/(\d{1,2})\.?\s+([A-Za-zÄÖÜäöü]+)\.?\s+(\d{4})/);
+  if (m) {
+    const mon = HEALTH_MONTHS[m[2].toLowerCase().replace(/\./g, '')];
+    if (mon) return m[3] + '-' + String(mon).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+  }
+  // "Jul 16, 2026" (month-first English)
+  m = s.match(/([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m) {
+    const mon = HEALTH_MONTHS[m[1].toLowerCase().replace(/\./g, '')];
+    if (mon) return m[3] + '-' + String(mon).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+  }
   return null;
 }
 
