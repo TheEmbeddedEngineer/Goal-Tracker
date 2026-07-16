@@ -90,12 +90,14 @@ sanctioned way features consume each other (never a direct import):
 | Method | Provider → consumer | Purpose |
 |---|---|---|
 | `isDayGoalMet(pk, ds)` | calories → weekly | day logged AND calorie max + protein min met |
-| `isSessionOnDate(pk, ds)` | training → weekly | workout or extra activity logged that day |
+| `isSessionOnDate(pk, ds)` | training → weekly | workout, extra activity, or 10k-steps check that day |
 | `refreshAutoChecks()` | weekly ← calories/training | re-derive weekly auto-checks after day data changes |
 | `logBurn/logWeight(pk, ds, v)` | calories ← boot | Health-ingest URL params (same code path as manual save) |
 | `logStepsIfGoalMet(pk, ds, n)` | training ← boot | checks the steps day off when the count clears the goal |
+| `logTennisDates(pk, dates)` | training ← boot | checks the Tennis extra activity for Health workout days |
 
-**Weekly auto-checks:** Sport ticks itself when a training session exists for a day;
+**Weekly auto-checks:** Sport ticks itself when a workout, an extra activity (Tennis)
+or a 10k-steps day exists for a day;
 Nutrition ticks itself once a day has *ended* with its goals met. One-way (never
 unchecks), never before `WK_AUTOCHECK_START`, idempotent, pushes only on change.
 The trigger sites are the data-change points in calories/training (saves, deletes,
@@ -192,10 +194,17 @@ app renders instantly and works offline. Purely device-local settings never sync
 3. `feature(n).loadData()` for all three — render from localStorage immediately.
 4. `feature(n).subscribe(code)` — attach Firestore listeners.
 5. `showTab(...)` — restore last active tab (`?tab=` URL param wins).
-6. **Health ingest:** `?burn=…&steps=…&weight=…[&date=…]` URL params (sent by an iOS
-   Shortcut that reads Apple Health) are logged for the device owner through the same
-   feature code as the manual save buttons, confirmed with a toast, and stripped from
-   the URL immediately so a reload can't double-ingest.
+6. **Health ingest:** URL params sent by an iOS Shortcut that reads Apple Health —
+   zipped parallel lists (`?adates=…&avals=…` active energy, `rdates/rvals` resting,
+   `sdates/svals` steps, `wdates/wtypes` workouts; ';'-joined, dates/values parsed
+   locale-defensively) plus legacy single-value forms (`burn/steps/weight[&date]`,
+   `yburn/ysteps`, `bactive/bresting/hsteps` series). Burned kcal = active+resting per
+   completed day; step counts ≥ goal check the day; workouts whose type contains
+   "tennis" check the Tennis extra activity (the type filter lives HERE, not in the
+   Shortcut, where a mis-serialized predicate would fail silently). Everything is
+   logged for the device owner through the same feature code as the manual save
+   buttons, confirmed with a toast, and stripped from the URL immediately so a reload
+   can't double-ingest.
 7. Register the service worker; wire the update toast.
 
 ## UI shell

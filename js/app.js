@@ -158,8 +158,28 @@ function parseHealthSeries(raw) {
   const activeSeries = { ...series('bactive'), ...zip('adates', 'avals', 'active') };
   const restingSeries = { ...series('bresting'), ...zip('rdates', 'rvals', 'resting') };
   const stepsSeries = { ...series('hsteps'), ...zip('sdates', 'svals', 'steps') };
+  // Workouts arrive as two zipped ';'-joined lists (start dates + types). The Shortcut
+  // deliberately sends ALL of last week's workouts and the tennis pick happens HERE —
+  // a workout-type filter inside the Shortcut would be another hand-built Apple
+  // serialization to get wrong, and a mismatch there fails silently.
+  const wdRaw = params.get('wdates'), wtRaw = params.get('wtypes');
+  let tennisDates = null; // null = workout params absent entirely
+  if (wdRaw != null || wtRaw != null) {
+    tennisDates = [];
+    const wd = String(wdRaw || '').split(';'), wt = String(wtRaw || '').split(';');
+    let bad = false;
+    const nw = Math.min(wd.length, wt.length);
+    for (let i = 0; i < nw; i++) {
+      if (!wd[i].trim() && !wt[i].trim()) continue;
+      const wds = parseHealthDate(wd[i]);
+      if (!wds) { bad = true; continue; }
+      if (wt[i].toLowerCase().indexOf('tennis') >= 0) tennisDates.push(wds);
+    }
+    if (bad) unreadable.push('workouts="' + (wdRaw || '') + '" / "' + (wtRaw || '') + '"');
+    tennisDates = [...new Set(tennisDates)].sort();
+  }
   const anySeries = [activeSeries, restingSeries, stepsSeries].some(s => Object.keys(s).length > 0);
-  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && !anySeries && unreadable.length === 0) return;
+  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && !anySeries && tennisDates === null && unreadable.length === 0) return;
   const pk = loadDevicePerson() || 'p1';
   let ds = params.get('date') || todayStr();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || ds > todayStr()) ds = todayStr();
@@ -191,11 +211,24 @@ function parseHealthSeries(raw) {
   if (Object.keys(stepsSeries).length > 0) {
     if (pk === 'p1') {
       const res = feature('training').logStepsFromCounts(pk, stepsSeries);
+      // Counts shown so a number that disagrees with the Health app (Shortcuts sums
+      // every source's raw samples; Health de-duplicates them) is visible immediately.
+      const withCount = d => d + ' (' + Math.round(stepsSeries[d]).toLocaleString() + ')';
       done.push(res.checked.length > 0
-        ? 'steps goal ✓ ' + res.checked.join(', ')
+        ? 'steps goal ✓ ' + res.checked.map(withCount).join(', ')
         : 'steps: no day at 10,000+ yet');
     } else {
       done.push('steps (steps tracking is p1-only)');
+    }
+  }
+  if (tennisDates !== null) {
+    if (tennisDates.length > 0) {
+      const added = feature('training').logTennisDates(pk, tennisDates);
+      done.push(added === null
+        ? 'tennis (not tracked for this person)'
+        : 'tennis ✓ ' + tennisDates.join(', '));
+    } else {
+      done.push('no tennis workouts in the last week');
     }
   }
   if (yburn > 0) { feature('calories').logBurn(pk, yds, yburn); done.push(yburn.toLocaleString() + ' kcal burned (' + yds + ')'); }

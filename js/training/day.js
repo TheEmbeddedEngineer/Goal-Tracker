@@ -1,6 +1,7 @@
 import { TR_STEPS_GOAL, state, trDayLogs, trExName, trExRow, trExpandedLogs, trFindLog, trFindPreviousLog, trLogKey, trRenderLogDetail, ui } from './state.js';
 import { trPushToCloud } from './sync.js';
 import { buildTrendChart, feature, todayStr } from '../core.js';
+import { TR_EXTRA_ACTIVITIES } from '../data.js';
 
 export function trRenderDay(day, dayKey) {
   const hasVariants = !!(day.gym && day.home);
@@ -193,6 +194,9 @@ export function trSaveStepsCheck() {
   else return;
   try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
   trPushToCloud({ skipMerge: !checked });
+  // The steps check counts toward the weekly Sport auto-check (one-way, so only a
+  // newly checked day can change anything there).
+  if (checked) feature('weekly').refreshAutoChecks();
 }
 
 // Health-ingest path (see js/app.js): a step COUNT arrives from Apple Health; the
@@ -206,6 +210,7 @@ export function trLogStepsIfGoalMet(pk, ds, count) {
     try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
     trPushToCloud();
     ui.renderContent();
+    feature('weekly').refreshAutoChecks();
   }
   return true;
 }
@@ -229,8 +234,31 @@ export function trLogStepsFromCounts(pk, byDate) {
     try { localStorage.setItem('training_stepsCheckLog', JSON.stringify(state.trStepsCheckLog)); } catch (err) {}
     trPushToCloud();
     ui.renderContent();
+    feature('weekly').refreshAutoChecks();
   }
   return { checked, below };
+}
+
+// Health-ingest path: tennis workout dates from Apple Health check the Tennis extra
+// activity for those days — same log the manual checkbox writes. Only for a person
+// whose activity list has Tennis (p1). One-way — never unchecks, so a workout deleted
+// in Health stays checked here. Returns the newly checked days, or null if this
+// person doesn't track tennis.
+export function trLogTennisDates(pk, dates) {
+  if (!(TR_EXTRA_ACTIVITIES[pk] || []).includes('Tennis')) return null;
+  if (!state.trExtraLog[pk]) state.trExtraLog[pk] = {};
+  const arr = state.trExtraLog[pk].Tennis || (state.trExtraLog[pk].Tennis = []);
+  const added = [];
+  [...new Set(dates)].sort().forEach(ds => {
+    if (!arr.includes(ds)) { arr.push(ds); added.push(ds); }
+  });
+  if (added.length > 0) {
+    try { localStorage.setItem('training_extraLog', JSON.stringify(state.trExtraLog)); } catch (err) {}
+    trPushToCloud();
+    ui.renderContent();
+    feature('weekly').refreshAutoChecks();
+  }
+  return added;
 }
 
 export function trLoadExtraActivityCheckbox(activity) {

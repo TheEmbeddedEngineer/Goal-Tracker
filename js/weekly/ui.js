@@ -154,8 +154,8 @@ export function wkRenderAll() {
 }
 
 // Auto-check Nutrition/Sport from the other two trackers (via the registry — never a
-// direct feature import): Sport once a workout or extra activity is logged for a day,
-// Nutrition once a day has ENDED with the calorie+protein goals met (today can't tick
+// direct feature import): Sport once a workout, extra activity (Tennis) or 10k-steps
+// day is logged, Nutrition once a day has ENDED with the calorie+protein goals met (today can't tick
 // early — more eating could still break the goal, same "today isn't over" convention as
 // the rest of the app). One-way: this only ever sets a checkmark, never clears one, and
 // never before WK_AUTOCHECK_START. Screen time stays manual. Idempotent; pushes only

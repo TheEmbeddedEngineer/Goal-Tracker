@@ -1,6 +1,6 @@
 import { TR_STREAK_MIN_LOGS, state, trCurrentPlan, trCurrentStreak, trLogsForDate, trWeekLogCount, ui } from './state.js';
 import { trApplyLegacyExerciseRenames, trPushToCloud, trSubscribeToCloud } from './sync.js';
-import { trLogStepsFromCounts, trLogStepsIfGoalMet } from './day.js';
+import { trLogStepsFromCounts, trLogStepsIfGoalMet, trLogTennisDates } from './day.js';
 import { trRenderAll, trRenderContent, trRenderDayTabs, trRenderPersonTabs } from './render.js';
 import { feature, getMonday, register, saveActivePerson, todayStr } from '../core.js';
 import { DAY_ORDER, TR_EXTRA_ACTIVITIES } from '../data.js';
@@ -44,11 +44,13 @@ register('training', {
   isDoneToday: (pk) => trLogsForDate(pk, todayStr()).length > 0 || (state.trCoreLog[pk] || []).includes(todayStr())
     || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((state.trExtraLog[pk] || {})[act] || []).includes(todayStr()))
     || (pk === 'p1' && (state.trStepsCheckLog.p1 || []).includes(todayStr())),
-  // For the weekly tab's Sport auto-check: a real standalone session — a logged workout
-  // or an extra activity (Tennis/Hyrox/Runs). Core stability and the steps checkbox
-  // deliberately don't count, same rule as trWeekLogCount.
+  // For the weekly tab's Sport auto-check: a logged workout, an extra activity
+  // (Tennis/Hyrox/Runs), or the 10k-steps check (p1-only, rule set 2026-07-16 — steps
+  // used to be excluded). Core stability alone still doesn't count, and trWeekLogCount
+  // (streak/glance) still counts only real sessions.
   isSessionOnDate: (pk, ds) => trLogsForDate(pk, ds).length > 0
-    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((state.trExtraLog[pk] || {})[act] || []).includes(ds)),
+    || (TR_EXTRA_ACTIVITIES[pk] || []).some(act => ((state.trExtraLog[pk] || {})[act] || []).includes(ds))
+    || (pk === 'p1' && (state.trStepsCheckLog.p1 || []).includes(ds)),
   glanceHtml: () => {
     const pk = state.trActivePerson;
     const n = trWeekLogCount(pk, getMonday(new Date()));
@@ -77,6 +79,7 @@ register('training', {
   // Health-ingest entry points (see js/app.js).
   logStepsIfGoalMet: trLogStepsIfGoalMet,
   logStepsFromCounts: trLogStepsFromCounts,
+  logTennisDates: trLogTennisDates,
   exportData: () => ({
     trainingLog: state.trTrainingLog, coreLog: state.trCoreLog,
     stepsCheckLog: state.trStepsCheckLog, extraLog: state.trExtraLog
