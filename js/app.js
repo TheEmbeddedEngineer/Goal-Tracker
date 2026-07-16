@@ -33,16 +33,46 @@ showTab(initialTab);
 // their checkmark. Values are logged for the DEVICE OWNER through the same feature
 // code as the manual save buttons (all sync/merge safety applies). The ingest params
 // are stripped from the URL immediately so a reload can never double-ingest.
+// Shortcuts renders numbers with the device's locale formatting (German: "3.100,5")
+// and health values can carry units ("512 kcal") — parse defensively instead of
+// trusting parseFloat, which would read "3.100,5" as 3.1.
+function parseHealthNumber(raw) {
+  if (raw == null) return NaN;
+  let s = String(raw).trim().replace(/[^\d.,-]/g, '');
+  if (!s) return NaN;
+  const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    // both present: the later one is the decimal separator
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    // lone comma: German decimal ("91,5") unless it reads like a thousands group
+    const frac = s.length - lastComma - 1;
+    s = (frac === 3 && s.length > 4) ? s.replace(/,/g, '') : s.replace(',', '.');
+  } else if (lastDot >= 0) {
+    // lone dot with a 3-digit tail: likely a German thousands separator ("12.040") —
+    // but fall back to decimal if that reading is implausibly huge
+    const frac = s.length - lastDot - 1;
+    if (frac === 3 && s.length > 4) {
+      const asThousands = parseFloat(s.replace(/\./g, ''));
+      if (asThousands <= 150000) return asThousands;
+    }
+  }
+  return parseFloat(s);
+}
+
 (function ingestHealthParams() {
   let params;
   try { params = new URLSearchParams(window.location.search); } catch (err) { return; }
+  const unreadable = [];
   const num = (name, decimals) => {
-    const v = parseFloat(params.get(name));
+    if (params.get(name) == null) return NaN;
+    const v = parseHealthNumber(params.get(name));
+    if (isNaN(v)) { unreadable.push(name + '="' + params.get(name) + '"'); return NaN; }
     return decimals ? Math.round(v * 100) / 100 : Math.round(v);
   };
   const burn = num('burn'), steps = num('steps'), weight = num('weight', true);
   const yburn = num('yburn'), ysteps = num('ysteps');
-  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0)) return;
+  if (![burn, steps, weight, yburn, ysteps].some(v => v > 0) && unreadable.length === 0) return;
   const pk = loadDevicePerson() || 'p1';
   let ds = params.get('date') || todayStr();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || ds > todayStr()) ds = todayStr();
@@ -60,6 +90,9 @@ showTab(initialTab);
   if (weight > 0) { feature('calories').logWeight(pk, ds, weight); done.push(weight + ' kg'); }
   if (ysteps > 0) logSteps(yds, ysteps);
   if (steps > 0) logSteps(ds, steps);
+  // Never fail silently: a param that arrived but couldn't be parsed gets shown
+  // verbatim, so a Shortcut problem is visible on screen instead of "nothing happened".
+  if (unreadable.length > 0) done.push('could not read: ' + unreadable.join(', '));
   try {
     const keep = params.get('tab') ? '?tab=' + encodeURIComponent(params.get('tab')) : '';
     history.replaceState(null, '', window.location.pathname + keep);
