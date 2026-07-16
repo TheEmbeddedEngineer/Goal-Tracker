@@ -95,7 +95,9 @@ export function calRenderTrendChart() {
   const metric = calTrendMetric;
   const points = calTrendPoints(state.calActivePerson, metric, 30);
   const personGoals = state.calGoals[state.calActivePerson] || {};
-  const goal = metric === 'calories' ? personGoals.calories : metric === 'protein' ? personGoals.protein : null;
+  const goal = metric === 'calories' ? personGoals.calories
+    : metric === 'protein' ? personGoals.protein
+    : (personGoals.weightGoal > 0 ? personGoals.weightGoal : null);
   const unit = metric === 'calories' ? '' : metric === 'protein' ? 'g' : 'kg';
   el.innerHTML = buildTrendChart(points, { color: '--' + state.calActivePerson, goal, unit, detailId: 'calTrendDetail' });
   el.querySelectorAll('.trend-dot').forEach(dot => {

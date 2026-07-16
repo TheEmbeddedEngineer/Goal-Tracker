@@ -142,15 +142,23 @@ export function buildTrendChart(points, opts) {
   if (points.length === 1) {
     return `<div class="empty-state" style="padding:1rem 0;">First value logged: ${points[0].value}${opts.unit || ''} on ${points[0].date}. Log one more to see a trend.</div>`;
   }
-  const width = 320, height = 130, padL = 34, padR = 10, padT = 12, padB = 20;
+  const width = 320, height = 130, padL = 38, padR = 10, padT = 12, padB = 20;
   const plotW = width - padL - padR, plotH = height - padT - padB;
 
   const values = points.map(p => p.value);
-  let min = Math.min(...values, opts.goal != null ? opts.goal : Infinity);
-  let max = Math.max(...values, opts.goal != null ? opts.goal : -Infinity);
-  if (min === max) { min -= 1; max += 1; }
-  const pad = (max - min) * 0.15;
-  min -= pad; max += pad;
+  let lo = Math.min(...values, opts.goal != null ? opts.goal : Infinity);
+  let hi = Math.max(...values, opts.goal != null ? opts.goal : -Infinity);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  // "Nice" axis: snap the bounds to a 1/2/5×10^k step so the scale reads as standard
+  // round numbers with even gridlines, instead of arbitrary data-hugging values that
+  // make every chart look differently (and randomly) scaled.
+  const rawStep = (hi - lo) / 4;
+  const stepPow = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = [1, 2, 5, 10].map(m => m * stepPow).find(s => s >= rawStep);
+  const min = Math.floor(lo / step) * step;
+  const max = Math.ceil(hi / step) * step;
+  const tickDecimals = step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  const fmtTick = v => v.toFixed(tickDecimals) + (opts.unit || '');
 
   const x = i => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
   const y = v => padT + plotH - ((v - min) / (max - min)) * plotH;
@@ -163,15 +171,21 @@ export function buildTrendChart(points, opts) {
        <text x="${width - padR}" y="${(goalY - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary)" text-anchor="end">Goal: ${opts.goal}${opts.unit || ''}</text>`
     : '';
 
+  const tickCount = Math.round((max - min) / step);
+  const gridLines = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const v = min + i * step;
+    const yy = y(v);
+    return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${width - padR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-width="${i === 0 ? 1 : 0.5}"></line>
+      <text x="${padL - 4}" y="${(yy + 3).toFixed(1)}" font-size="9" fill="var(--text-muted)" text-anchor="end">${fmtTick(v)}</text>`;
+  }).join('');
+
   return `
     <svg viewBox="0 0 ${width} ${height}" class="trend-chart">
       <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="var(--border)" stroke-width="1"></line>
-      <line x1="${padL}" y1="${padT + plotH}" x2="${width - padR}" y2="${padT + plotH}" stroke="var(--border)" stroke-width="1"></line>
+      ${gridLines}
       ${goalLine}
       <polyline points="${linePoints}" fill="none" stroke="var(${opts.color})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
       ${dots}
-      <text x="2" y="${padT + 4}" font-size="9" fill="var(--text-muted)">${Math.round(max)}${opts.unit || ''}</text>
-      <text x="2" y="${padT + plotH}" font-size="9" fill="var(--text-muted)">${Math.round(min)}${opts.unit || ''}</text>
       <text x="${padL}" y="${height - 4}" font-size="9" fill="var(--text-muted)">${points[0].date.slice(5)}</text>
       <text x="${width - padR}" y="${height - 4}" font-size="9" fill="var(--text-muted)" text-anchor="end">${points[points.length - 1].date.slice(5)}</text>
     </svg>

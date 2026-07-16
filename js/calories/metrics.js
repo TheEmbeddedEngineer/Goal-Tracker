@@ -256,6 +256,8 @@ export function calPopulateGoalsInputs() {
   document.getElementById('p2CalGoal').value = state.calGoals.p2.calories;
   document.getElementById('p2ProtGoal').value = state.calGoals.p2.protein;
   document.getElementById('p1DefaultBurn').value = state.calGoals.p1.defaultBurn || 0;
+  document.getElementById('p1WeightGoal').value = state.calGoals.p1.weightGoal || 0;
+  document.getElementById('p2WeightGoal').value = state.calGoals.p2.weightGoal || 0;
   // These labels used to read the same generic "Calorie goal (max, kcal)" text for both
   // people with nothing to tell the two rows apart beyond position in the layout — prefix
   // with the actual name so it's unambiguous which row is whose.
@@ -263,6 +265,8 @@ export function calPopulateGoalsInputs() {
   document.getElementById('p1ProtLabel').textContent = sharedSettings.p1 + ' — Protein goal (min, g)';
   document.getElementById('p2CalLabel').textContent = sharedSettings.p2 + ' — Calorie goal (max, kcal)';
   document.getElementById('p2ProtLabel').textContent = sharedSettings.p2 + ' — Protein goal (min, g)';
+  document.getElementById('p1WeightGoalLabel').textContent = sharedSettings.p1 + ' — Weight goal (kg, shown in the trend chart, 0 = off)';
+  document.getElementById('p2WeightGoalLabel').textContent = sharedSettings.p2 + ' — Weight goal (kg, shown in the trend chart, 0 = off)';
   document.getElementById('p1BurnLabel').textContent = sharedSettings.p1 + ' — Default daily burn (kcal), fallback for past days with food logged but no burn entry; today only counts once a burn is logged (0 = off)';
 }
 
@@ -282,11 +286,13 @@ async function calSaveGoals() {
     p1: {
       calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
       protein: parseInt(document.getElementById('p1ProtGoal').value) || 0,
-      defaultBurn: parseInt(document.getElementById('p1DefaultBurn').value) || 0
+      defaultBurn: parseInt(document.getElementById('p1DefaultBurn').value) || 0,
+      weightGoal: parseFloat(document.getElementById('p1WeightGoal').value) || 0
     },
     p2: {
       calories: parseInt(document.getElementById('p2CalGoal').value) || 0,
-      protein: parseInt(document.getElementById('p2ProtGoal').value) || 0
+      protein: parseInt(document.getElementById('p2ProtGoal').value) || 0,
+      weightGoal: parseFloat(document.getElementById('p2WeightGoal').value) || 0
     }
   };
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: state.calGoals })); } catch (err) {}
@@ -301,7 +307,7 @@ document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight
 document.getElementById('burnDate').addEventListener('change', calRenderBurnCard);
 document.getElementById('burnSaveBtn').addEventListener('click', calSaveBurn);
 
-['p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal','p1DefaultBurn'].forEach(id => {
+['p1CalGoal','p1ProtGoal','p2CalGoal','p2ProtGoal','p1DefaultBurn','p1WeightGoal','p2WeightGoal'].forEach(id => {
   document.getElementById(id).addEventListener('change', calSaveGoals);
 });
 
