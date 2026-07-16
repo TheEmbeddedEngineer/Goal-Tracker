@@ -3,7 +3,7 @@
 // ES modules kills the boot). Any shell change therefore requires a CACHE_NAME bump;
 // the activate handler announces the new version to open pages. Firebase/CDN requests
 // are cross-origin and pass through untouched — Firestore sync is never cached.
-const CACHE_NAME = 'couple-tracker-v25';
+const CACHE_NAME = 'couple-tracker-v26';
 const APP_SHELL = [
   './', './index.html', './styles.css',
   './js/core.js', './js/data.js', './js/shared.js', './js/app.js',

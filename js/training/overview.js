@@ -1,5 +1,5 @@
 import { TR_STEPS_GOAL, TR_STREAK_MIN_LOGS, state, trCurrentStreak, trDayShortLabel, trDayVariantLabel, trFindPreviousLog, trLogsForDate, trRenderLogDetail, trWeekLogCount } from './state.js';
-import { buildMonthGrid, getMonday } from '../core.js';
+import { buildMonthGrid, getMonday, todayStr } from '../core.js';
 import { TR_EXTRA_ACTIVITIES } from '../data.js';
 import { sharedSettings } from '../shared.js';
 
@@ -106,9 +106,19 @@ export function trRenderOverviewCalendarGrid() {
   }).join('');
   wrap.querySelectorAll('.month-day[data-date]').forEach(el => {
     el.addEventListener('click', () => {
-      state.trOverviewSelectedDate = el.dataset.date;
+      const ds = el.dataset.date;
+      state.trOverviewSelectedDate = ds;
       trRenderOverviewCalendarGrid();
       trRenderOverviewSelectedDay();
+      // Also jump the steps / extra-activity date pickers below to the tapped day,
+      // so (un)checking Tennis or 10k steps for that day doesn't need a re-pick.
+      if (ds <= todayStr()) {
+        document.querySelectorAll('.extra-activity-date, #stepsCheckDate').forEach(inp => {
+          if (inp.value === ds) return;
+          inp.value = ds;
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
     });
   });
 }
