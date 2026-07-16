@@ -11,6 +11,9 @@ Live at: https://theembeddedengineer.github.io/Goal-Tracker/
 
 - **No build step.** Native ES modules served exactly as written — no bundler, no npm,
   no transpiler. Deploy is `git push` to `main`; GitHub Pages serves the files.
+  The one vendored third-party file is `js/vendor/zxing.min.js` (@zxing/library
+  0.21.3, Apache-2.0, barcode decoding) — pinned, self-hosted, lazily loaded as a
+  classic script only when the scanner is used, and excluded from module lint.
 - **Backend is Firebase**: anonymous auth (`signInAnonymously`) + Firestore. The web
   `apiKey` in `js/core.js` is intentionally public (normal for Firebase — access control
   comes from Firestore rules, not key secrecy). All data is keyed by the couple's
@@ -117,8 +120,9 @@ state.js   ◄──  sync.js  ◄──  UI file(s)  ◄──  index.js
 - **UI files** — weekly: `ui.js`; calories: `log.js` (daily food logging + autocomplete),
   `metrics.js` (weight/burn/deficit/goals), `bank.js` (food bank card), `insights.js`
   (month calendar, recap, trends), `scan.js` (camera barcode scanner → Open Food Facts
-  lookup → prefills the log form; button only rendered when the browser supports
-  BarcodeDetector + camera); training: `overview.js` (calendar + activities),
+  lookup → prefills the log form; uses the native BarcodeDetector where it exists and
+  otherwise the vendored ZXing decoder — iOS Safari has no BarcodeDetector);
+  training: `overview.js` (calendar + activities),
   `day.js` (day view, workout logging, progress), `render.js` (tab bars + content
   composition).
 - **`index.js`** — composes `renderAll`, registers with the core registry, and wires the
