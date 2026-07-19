@@ -49,9 +49,11 @@ function calMergeEntriesInto(localEntries, remoteEntries) {
 
 function calApplyRemoteData(data) {
   calApplyingRemote = true;
+  const prevVacations = JSON.stringify(state.calVacations);
   if (data.settings) {
     applyRemoteNames(data.settings);
     state.calGoals = data.settings.goals || state.calGoals;
+    state.calVacations = data.settings.vacations || {};
   }
   state.calDailyGoals = data.dailyGoals || {};
   state.calFoodBank = data.foodBank || [];
@@ -64,11 +66,18 @@ function calApplyRemoteData(data) {
   try { localStorage.setItem('calorie_foodBank', JSON.stringify(state.calFoodBank)); } catch (err) {}
   try { localStorage.setItem('calorie_weightLog', JSON.stringify(state.calWeightLog)); } catch (err) {}
   try { localStorage.setItem('calorie_burnLog', JSON.stringify(state.calBurnLog)); } catch (err) {}
+  try { localStorage.setItem('calorie_vacations', JSON.stringify(state.calVacations)); } catch (err) {}
   calRefreshTopFoodsCache();
   ui.renderPersonTabs();
   ui.renderAll();
   ui.renderWeightCard();
   ui.renderBurnCard();
+  // The training calendar colors vacation days too — refresh it when a remote edit
+  // actually changed them (not on every ordinary calories snapshot).
+  if (JSON.stringify(state.calVacations) !== prevVacations) {
+    const tr = feature('training');
+    if (tr) tr.renderAll();
+  }
   calApplyingRemote = false;
   if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);
 }
@@ -205,7 +214,7 @@ export async function calPushToCloud(opts = {}) {
   // The captured references keep pointing at the pre-snapshot objects, so the saved
   // value reaches Firestore and the echo snapshot brings it back into live state.
   const payload = {
-    settings: { ...syncableNames(), goals: state.calGoals },
+    settings: { ...syncableNames(), goals: state.calGoals, vacations: state.calVacations },
     dailyGoals: state.calDailyGoals,
     foodBank: state.calFoodBank,
     weightLog: state.calWeightLog,
@@ -239,6 +248,11 @@ export async function calPushToCloud(opts = {}) {
         payload[field] = { p1: { ...(payload[field].p1 || {}) }, p2: { ...(payload[field].p2 || {}) } };
         payload[field][pk][ds] = deleteField();
       }
+    }
+    // Same map-key-deletion rule for removed vacation ranges (keyed by start date).
+    if (opts.deleteVacations && !opts.replace) {
+      payload.settings = { ...payload.settings, vacations: { ...state.calVacations } };
+      opts.deleteVacations.forEach(from => { payload.settings.vacations[from] = deleteField(); });
     }
     await setDoc(doc(db, 'calories', coupleCode), payload, writeOpts);
     try { localStorage.setItem('calorie_foodBank', JSON.stringify(state.calFoodBank)); } catch (err) {}

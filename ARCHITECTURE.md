@@ -95,6 +95,7 @@ sanctioned way features consume each other (never a direct import):
 | `logBurn/logWeight(pk, ds, v)` | calories ← boot | Health-ingest URL params (same code path as manual save) |
 | `logStepsIfGoalMet(pk, ds, n)` | training ← boot | checks the steps day off when the count clears the goal |
 | `logTennisDates(pk, dates)` | training ← boot | checks the Tennis extra activity for Health workout days |
+| `isVacationDay(ds)` | calories → training | vacation days (defined in the calories Goals card) render blue in the training calendar |
 
 **Weekly auto-checks:** Sport ticks itself when a workout, an extra activity (Tennis)
 or a 10k-steps day exists for a day;
@@ -143,7 +144,7 @@ stays a plain `let` in that file.
 | Document | Contents |
 |---|---|
 | `trackers/{code}` | Weekly: `entries` (nested maps person→date→checks), `weeklyThresholds`, `settings` (names + thresholds) |
-| `calories/{code}` | `foodBank` (array), `weightLog`/`burnLog` (maps), `goals` + `dailyGoals`, `settings` |
+| `calories/{code}` | `foodBank` (array), `weightLog`/`burnLog` (maps), `goals` + `dailyGoals`, `settings` (names, goals, `vacations` — a from→to date map, keyed by start date so it deep-merges instead of clobbering like an array would) |
 | `calorieEntries/{code}_{YYYY-MM}` | Food-log items **sharded one document per month** so no single doc grows toward Firestore's 1 MiB limit |
 | `training/{code}` | `trainingLog` (array per person), `coreLog`, `extraLog`, `stepsCheckLog`, `settings` |
 

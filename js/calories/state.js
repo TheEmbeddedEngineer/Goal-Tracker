@@ -15,6 +15,11 @@ export const state = {
   // Total calories burned that day (e.g. from a fitness tracker's TDEE reading) — same
   // shape and sync-safety as calWeightLog.
   calBurnLog: { p1: {}, p2: {} },
+  // Vacation ranges shared by both people, from-date -> to-date (both inclusive,
+  // YYYY-MM-DD). A map keyed by start date rather than an array, so concurrent adds
+  // from two devices deep-merge under Firestore's merge:true instead of clobbering
+  // each other (same reasoning as calWeightLog/calBurnLog).
+  calVacations: {},
   calActivePerson: loadActivePerson('calActivePerson'),
   calViewedMonth: null,
   calSelectedMonthDate: null,
@@ -41,6 +46,13 @@ export function calMonthKey(dateStr) { return dateStr.slice(0, 7); }
 
 export function calGoalsForDay(dateStr) {
   return state.calDailyGoals[dateStr] || state.calGoals;
+}
+
+// Vacation days show blue in the calendars, expect no food logging, and never count
+// toward the deficit. Also read by the training tab (via the feature registry) to
+// color its calendar.
+export function calIsVacationDay(dateStr) {
+  return Object.entries(state.calVacations).some(([from, to]) => dateStr >= from && dateStr <= to);
 }
 
 export function monthKey(y,m) { return y + '-' + String(m+1).padStart(2,'0'); }

@@ -1,4 +1,4 @@
-import { calDayItems, calDayTotals, calGoalsForDay, calRefreshTopFoodsCache, state, ui } from './state.js';
+import { calDayItems, calDayTotals, calGoalsForDay, calIsVacationDay, calRefreshTopFoodsCache, state, ui } from './state.js';
 import { calEntriesCollectionQuery, calPushToCloud, calSubscribeToCloud, calSubscribeToEntriesCloud } from './sync.js';
 import { calPopulateCategorySelect, calRenderLogCard, calRenderRecentChips } from './log.js';
 import { calCumulativeDeficit, calLogBurn, calLogBurnMany, calLogWeight, calPopulateGoalsInputs, calRenderBurnCard, calRenderDeficitCard, calRenderWeightCard } from './metrics.js';
@@ -45,6 +45,7 @@ function calLoadData() {
     if (s) { const parsed = JSON.parse(s); state.calGoals = parsed.goals || state.calGoals; }
   } catch (err) {}
   try { state.calDailyGoals = JSON.parse(localStorage.getItem('calorie_dailyGoals') || '{}'); } catch (err) { state.calDailyGoals = {}; }
+  try { state.calVacations = JSON.parse(localStorage.getItem('calorie_vacations') || '{}'); } catch (err) { state.calVacations = {}; }
   try { state.calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { state.calFoodBank = []; }
   try {
     state.calWeightLog = JSON.parse(localStorage.getItem('calorie_weightLog') || '{}');
@@ -139,13 +140,16 @@ register('calories', {
     calRenderBurnCard();
   },
   onSettingsChanged: () => { calRenderPersonTabs(); calPopulateGoalsInputs(); calRenderAll(); calPushToCloud(); },
+  // For the training tab's calendar: vacation days render blue there too.
+  isVacationDay: calIsVacationDay,
   // Health-ingest entry points (see js/app.js) — same code paths as the manual save buttons.
   logBurn: calLogBurn,
   logBurnMany: calLogBurnMany,
   logWeight: calLogWeight,
   exportData: () => ({
     goals: state.calGoals, dailyGoals: state.calDailyGoals, entries: state.calEntries,
-    foodBank: state.calFoodBank, weightLog: state.calWeightLog, burnLog: state.calBurnLog
+    foodBank: state.calFoodBank, weightLog: state.calWeightLog, burnLog: state.calBurnLog,
+    vacations: state.calVacations
   })
 });
 

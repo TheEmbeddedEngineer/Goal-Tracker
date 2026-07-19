@@ -1,4 +1,4 @@
-import { calDayItems, calDayTotals, calGoalsForDay, state, ui } from './state.js';
+import { calDayItems, calDayTotals, calGoalsForDay, calIsVacationDay, state, ui } from './state.js';
 import { calRenderLogCard } from './log.js';
 import { calRenderBurnCard, calRenderWeightCard } from './metrics.js';
 import { buildMonthGrid, buildTrendChart, dstr, todayStr } from '../core.js';
@@ -6,7 +6,9 @@ import { sharedSettings } from '../shared.js';
 
 function calDayStatus(person, dateStr) {
   const items = calDayItems(person, dateStr);
-  if (items.length === 0) return 'none';
+  // A logged vacation day still shows its real status — blue only marks the expected
+  // "nothing logged, and that's fine" case.
+  if (items.length === 0) return calIsVacationDay(dateStr) ? 'vacation' : 'none';
   const totals = calDayTotals(person, dateStr);
   const goal = calGoalsForDay(dateStr)[person];
   const calOk = totals.calories <= goal.calories;
@@ -37,7 +39,9 @@ export function calRenderMonth() {
       const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const status = calDayStatus(pk, ds);
       const totals = calDayTotals(pk, ds);
-      const title = status === 'none' ? d + ': not logged' : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein' + (status === 'inprogress' ? ' (today, still logging)' : '');
+      const title = status === 'vacation' ? d + ': vacation'
+        : status === 'none' ? d + ': not logged'
+        : d + ': ' + Math.round(totals.calories) + ' kcal, ' + Math.round(totals.protein) + 'g protein' + (status === 'inprogress' ? ' (today, still logging)' : '');
       const selected = state.calSelectedMonthDate === ds && state.calActivePerson === pk ? ' selected' : '';
       return `<div class="month-day ${status}${selected}" data-date="${ds}" data-person="${pk}" title="${title}"></div>`;
     }).join('');

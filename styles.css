@@ -9,6 +9,7 @@
     --green-bg: #e7f2e3; --green-text: #2f5c26; --green-border: #b9d9ae;
     --amber-bg: #faf1de; --amber-text: #8a5a12; --amber-border: #e9cf9c;
     --red-bg: #fbe9e7; --red-text: #93362b; --red-border: #eec2bc;
+    --blue-bg: #e6eef8; --blue-text: #2b5379; --blue-border: #b9cfe8;
     --accent: #1aa338;
     --accent-text: #ffffff;
     --p1: #3d6da8;
@@ -26,6 +27,7 @@
       --green-bg: #1f3420; --green-text: #a8d39b; --green-border: #33512f;
       --amber-bg: #3a2f1a; --amber-text: #e3bd7c; --amber-border: #5c4a26;
       --red-bg: #3a2320; --red-text: #f0a89f; --red-border: #5c3630;
+      --blue-bg: #20293a; --blue-text: #9ec3ef; --blue-border: #31517a;
       --accent: #57d573; --accent-text: #1c1a17;
       --p1: #7fb0e8; --p2: #e090bb;
       --heat-0: #34322b; --heat-1: #2f4429; --heat-2: #3c6a33; --heat-3: #4f9c3c;
@@ -158,6 +160,7 @@
   .month-day.good { color:var(--green-text); background:var(--green-border); }
   .month-day.bad { background:var(--red-border); }
   .month-day.inprogress { background:var(--amber-border); color:var(--amber-text); }
+  .month-day.vacation { background:var(--blue-border); color:var(--blue-text); }
   .month-day.blank { background:none; }
   .month-day:not(.blank) { cursor:pointer; }
   .month-day.selected { outline:2px solid var(--accent); outline-offset:1px; }

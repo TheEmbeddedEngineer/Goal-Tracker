@@ -1,6 +1,6 @@
-import { CAL_DEFICIT_GOAL, CAL_KCAL_PER_KG, calDayItems, calDayTotals, state, ui } from './state.js';
+import { CAL_DEFICIT_GOAL, CAL_KCAL_PER_KG, calDayItems, calDayTotals, calIsVacationDay, state, ui } from './state.js';
 import { calPushToCloud } from './sync.js';
-import { calRound2, dstr, getMonday, parseDate, todayStr } from '../core.js';
+import { calRound2, dstr, feature, getMonday, parseDate, todayStr } from '../core.js';
 import { sharedSettings } from '../shared.js';
 
 function calLatestWeight(person) {
@@ -193,6 +193,10 @@ export function calLogBurnMany(pk, byDate) {
 // days that have BOTH a burn entry and logged food — without both, there's nothing
 // meaningful to compute (assuming 0 eaten on an unlogged day would wildly overstate it).
 function calDailyDeficit(person, ds) {
+  // Vacation days are deliberately untracked: no food gets logged, so any deficit
+  // computed for them would be fiction — excluded even when a burn value exists
+  // (the Health shortcut backfills burn for vacation days on its own).
+  if (calIsVacationDay(ds)) return null;
   if (calDayItems(person, ds).length === 0) return null;
   let burned = (state.calBurnLog[person] || {})[ds];
   if (burned === undefined) {
@@ -237,11 +241,16 @@ function calDeficitDayCoverage(person) {
   const allDates = [...Object.keys(state.calBurnLog[person] || {}), ...Object.keys(state.calEntries[person] || {})];
   if (allDates.length === 0) return { counted: 0, totalDays: 0 };
   const start = parseDate(allDates.sort()[0]);
-  const totalDays = Math.floor((new Date() - start) / 86400000) + 1;
-  let counted = 0;
-  for (let i = 0; i < totalDays; i++) {
+  const spanDays = Math.floor((new Date() - start) / 86400000) + 1;
+  // Vacation days are left out of the denominator too — they're not "missing
+  // coverage", they're days that were never supposed to be tracked.
+  let counted = 0, totalDays = 0;
+  for (let i = 0; i < spanDays; i++) {
     const d = new Date(start); d.setDate(d.getDate() + i);
-    if (calDailyDeficit(person, dstr(d)) !== null) counted++;
+    const ds = dstr(d);
+    if (calIsVacationDay(ds)) continue;
+    totalDays++;
+    if (calDailyDeficit(person, ds) !== null) counted++;
   }
   return { counted, totalDays };
 }
@@ -291,6 +300,50 @@ export function calPopulateGoalsInputs() {
   document.getElementById('p1WeightGoalLabel').textContent = sharedSettings.p1 + ' — Weight goal (kg, shown in the trend chart, 0 = off)';
   document.getElementById('p2WeightGoalLabel').textContent = sharedSettings.p2 + ' — Weight goal (kg, shown in the trend chart, 0 = off)';
   document.getElementById('p1BurnLabel').textContent = sharedSettings.p1 + ' — Default daily burn (kcal), fallback for past days with food logged but no burn entry; today only counts once a burn is logged (0 = off)';
+  calRenderVacationList();
+}
+
+// Vacation days changed — the training calendar colors them blue too, so refresh it
+// alongside the calories views. Cross-feature, so it goes through the registry.
+function calRefreshAfterVacationChange() {
+  calRenderVacationList();
+  ui.renderAll();
+  const tr = feature('training');
+  if (tr) tr.renderAll();
+}
+
+export function calRenderVacationList() {
+  const el = document.getElementById('calVacationList');
+  if (!el) return;
+  const froms = Object.keys(state.calVacations).sort();
+  el.innerHTML = froms.map(from => `
+    <div class="food-item">
+      <span class="fi-name">${from} &rarr; ${state.calVacations[from]}</span>
+      <button class="fi-del vac-del" data-from="${from}" title="Remove">&times;</button>
+    </div>`).join('');
+  el.querySelectorAll('.vac-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const from = btn.dataset.from;
+      if (!confirm(`Remove the vacation ${from} → ${state.calVacations[from]}? Its days go back to being tracked normally.`)) return;
+      delete state.calVacations[from];
+      try { localStorage.setItem('calorie_vacations', JSON.stringify(state.calVacations)); } catch (err) {}
+      calRefreshAfterVacationChange();
+      calPushToCloud({ deleteVacations: [from] });
+    });
+  });
+}
+
+function calAddVacation() {
+  const from = document.getElementById('calVacationFrom').value;
+  const to = document.getElementById('calVacationTo').value;
+  if (!from || !to) { alert('Pick both the first and the last vacation day.'); return; }
+  if (to < from) { alert('The vacation ends before it starts — check the two dates.'); return; }
+  state.calVacations[from] = to;
+  try { localStorage.setItem('calorie_vacations', JSON.stringify(state.calVacations)); } catch (err) {}
+  document.getElementById('calVacationFrom').value = '';
+  document.getElementById('calVacationTo').value = '';
+  calRefreshAfterVacationChange();
+  calPushToCloud();
 }
 
 async function calSaveGoals() {
@@ -325,6 +378,7 @@ async function calSaveGoals() {
   calPushToCloud();
 }
 
+document.getElementById('calVacationAddBtn').addEventListener('click', calAddVacation);
 document.getElementById('weightDate').addEventListener('change', calRenderWeightCard);
 document.getElementById('weightSaveBtn').addEventListener('click', calSaveWeight);
 document.getElementById('burnDate').addEventListener('change', calRenderBurnCard);

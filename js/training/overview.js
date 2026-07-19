@@ -1,5 +1,5 @@
-import { TR_STEPS_GOAL, TR_STREAK_MIN_LOGS, state, trCurrentStreak, trDayShortLabel, trDayVariantLabel, trFindPreviousLog, trLogsForDate, trRenderLogDetail, trWeekLogCount } from './state.js';
-import { buildMonthGrid, getMonday, todayStr } from '../core.js';
+import { TR_STEPS_GOAL, TR_STREAK_MIN_LOGS, state, trCurrentStreak, trDayShortLabel, trDayVariantLabel, trFindPreviousLog, trFirstActivityDate, trLogsForDate, trRenderLogDetail, trWeekLogCount } from './state.js';
+import { buildMonthGrid, feature, getMonday, todayStr } from '../core.js';
 import { TR_EXTRA_ACTIVITIES } from '../data.js';
 import { sharedSettings } from '../shared.js';
 
@@ -24,6 +24,8 @@ export function trRenderOverview(plan) {
     <div class="month-grid" id="trOverviewCalGrid" style="margin-bottom:10px;"></div>
     <div class="month-legend" style="margin-bottom:14px;">
       <span><span class="legend-swatch" style="background:var(--green-border)"></span>Trained (day shown in square)</span>
+      <span><span class="legend-swatch" style="background:var(--red-border)"></span>No sport</span>
+      <span><span class="legend-swatch" style="background:var(--blue-border)"></span>Vacation</span>
       <span><span class="legend-swatch" style="background:var(--heat-none)"></span>Not logged</span>
     </div>
     <div id="trOverviewSelectedDay"></div>
@@ -84,6 +86,11 @@ export function trRenderOverviewCalendarGrid() {
 
   const cells = buildMonthGrid(year, month);
   const wrap = document.getElementById('trOverviewCalGrid');
+  // Vacations are defined in the Calories tab's Goals card but color this calendar
+  // too — cross-feature, so it comes through the registry, never a direct import.
+  const isVacationDay = (feature('calories') || {}).isVacationDay || (() => false);
+  const today = todayStr();
+  const firstActivity = trFirstActivityDate(state.trActivePerson);
   wrap.innerHTML = cells.map(d => {
     if (d === null) return '<div class="month-day blank"></div>';
     const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
@@ -92,12 +99,17 @@ export function trRenderOverviewCalendarGrid() {
     const extraDone = (TR_EXTRA_ACTIVITIES[state.trActivePerson] || []).filter(act => ((state.trExtraLog[state.trActivePerson] || {})[act] || []).includes(ds));
     const stepsDone = state.trActivePerson === 'p1' && (state.trStepsCheckLog.p1 || []).includes(ds);
     const hasAny = logs.length > 0 || coreDone || extraDone.length > 0 || stepsDone;
-    const status = hasAny ? 'good' : '';
+    // A trained vacation day still shows green; today isn't red yet — it's not over.
+    const vacation = !hasAny && isVacationDay(ds);
+    const missed = !hasAny && !vacation && firstActivity && ds >= firstActivity && ds < today;
+    const status = hasAny ? 'good' : vacation ? 'vacation' : missed ? 'bad' : '';
     const selected = state.trOverviewSelectedDate === ds ? ' selected' : '';
     const titleParts = logs.map(trDayVariantLabel).concat(extraDone);
     if (coreDone) titleParts.push('Core stability');
     if (stepsDone) titleParts.push(`${TR_STEPS_GOAL.toLocaleString()}+ steps`);
-    const title = hasAny ? ds + ': ' + titleParts.join(', ') : ds + ': not logged';
+    const title = hasAny ? ds + ': ' + titleParts.join(', ')
+      : vacation ? ds + ': vacation'
+      : missed ? ds + ': no sport' : ds + ': not logged';
     const labelParts = logs.map(trDayShortLabel).concat(extraDone.map(act => act[0]));
     if (coreDone) labelParts.push('C');
     if (stepsDone) labelParts.push('S');

@@ -63,6 +63,16 @@ export function trLogsForDate(person, dateStr) {
   return (state.trTrainingLog[person] || []).filter(l => l.date === dateStr);
 }
 
+// Earliest date this person ever logged anything (workout, core, extra activity, or a
+// steps check) — the calendar's "no sport" red marks only start here, so months from
+// before tracking began don't render as a wall of misses.
+export function trFirstActivityDate(person) {
+  const dates = (state.trTrainingLog[person] || []).map(l => l.date)
+    .concat(state.trCoreLog[person] || [], state.trStepsCheckLog[person] || []);
+  Object.values(state.trExtraLog[person] || {}).forEach(ds => dates.push(...ds));
+  return dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null;
+}
+
 export const TR_STREAK_MIN_LOGS = 4;
 
 // Core stability is intentionally excluded here — it's a short add-on, not a standalone
