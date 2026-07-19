@@ -72,11 +72,13 @@ function calApplyRemoteData(data) {
   ui.renderAll();
   ui.renderWeightCard();
   ui.renderBurnCard();
-  // The training calendar colors vacation days too — refresh it when a remote edit
-  // actually changed them (not on every ordinary calories snapshot).
+  // The training calendar and weekly heatmap color vacation days too — refresh them
+  // when a remote edit actually changed vacations (not on every calories snapshot).
   if (JSON.stringify(state.calVacations) !== prevVacations) {
-    const tr = feature('training');
-    if (tr) tr.renderAll();
+    ['training', 'weekly'].forEach(name => {
+      const f = feature(name);
+      if (f) f.renderAll();
+    });
   }
   calApplyingRemote = false;
   if (data.entries) calMigrateLegacyEntriesIfNeeded(data.entries);

@@ -107,13 +107,22 @@ function wkDayCompletionLevel(personKey, dateStr) {
 }
 
 function wkRenderHeatmap(personKey, weekMonday) {
+  const isVacationDay = (feature('calories') || {}).isVacationDay || (() => false);
+  const today = todayStr();
   let html = '<div class="heatmap">';
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
     const ds = dstr(d);
     const level = wkDayCompletionLevel(personKey, ds);
-    const heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
-    const title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
+    let heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
+    let title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
+    // A day with not a single check is a miss once it's over — red, same as the
+    // training calendar (today stays neutral while it's still in progress). Vacation
+    // days go blue instead: nothing was supposed to be logged on them.
+    if (level <= 0) {
+      if (isVacationDay(ds)) { heatVar = 'var(--blue-border)'; title = fmtDate(ds) + ': vacation'; }
+      else if (ds < today) heatVar = 'var(--red-border)';
+    }
     html += `<div class="heat-day" data-date="${ds}" data-person="${personKey}" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
   }
   html += '</div>';
@@ -124,7 +133,8 @@ function wkRenderHeatmap(personKey, weekMonday) {
 function wkDayDetailText(personKey, dateStr) {
   const label = parseDate(dateStr).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
   const day = (state.wkEntries[personKey] || {})[dateStr];
-  if (!day) return label + ': nothing logged yet';
+  const isVacationDay = (feature('calories') || {}).isVacationDay || (() => false);
+  if (!day) return label + (isVacationDay(dateStr) ? ': vacation — nothing to log' : ': nothing logged yet');
   const parts = CATS.map(([k, catLabel]) => (day[k] ? '✓ ' : '✗ ') + catLabel);
   return label + ' — ' + parts.join('   ');
 }

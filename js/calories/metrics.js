@@ -303,13 +303,16 @@ export function calPopulateGoalsInputs() {
   calRenderVacationList();
 }
 
-// Vacation days changed — the training calendar colors them blue too, so refresh it
-// alongside the calories views. Cross-feature, so it goes through the registry.
+// Vacation days changed — the training calendar and weekly heatmap color them blue
+// too, so refresh those alongside the calories views. Cross-feature, so it goes
+// through the registry.
 function calRefreshAfterVacationChange() {
   calRenderVacationList();
   ui.renderAll();
-  const tr = feature('training');
-  if (tr) tr.renderAll();
+  ['training', 'weekly'].forEach(name => {
+    const f = feature(name);
+    if (f) f.renderAll();
+  });
 }
 
 export function calRenderVacationList() {

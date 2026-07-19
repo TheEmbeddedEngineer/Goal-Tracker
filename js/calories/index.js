@@ -45,7 +45,6 @@ function calLoadData() {
     if (s) { const parsed = JSON.parse(s); state.calGoals = parsed.goals || state.calGoals; }
   } catch (err) {}
   try { state.calDailyGoals = JSON.parse(localStorage.getItem('calorie_dailyGoals') || '{}'); } catch (err) { state.calDailyGoals = {}; }
-  try { state.calVacations = JSON.parse(localStorage.getItem('calorie_vacations') || '{}'); } catch (err) { state.calVacations = {}; }
   try { state.calFoodBank = JSON.parse(localStorage.getItem('calorie_foodBank') || '[]'); } catch (err) { state.calFoodBank = []; }
   try {
     state.calWeightLog = JSON.parse(localStorage.getItem('calorie_weightLog') || '{}');

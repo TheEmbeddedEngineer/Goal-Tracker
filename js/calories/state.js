@@ -18,8 +18,10 @@ export const state = {
   // Vacation ranges shared by both people, from-date -> to-date (both inclusive,
   // YYYY-MM-DD). A map keyed by start date rather than an array, so concurrent adds
   // from two devices deep-merge under Firestore's merge:true instead of clobbering
-  // each other (same reasoning as calWeightLog/calBurnLog).
-  calVacations: {},
+  // each other (same reasoning as calWeightLog/calBurnLog). Loaded here at module
+  // init (like calActivePerson below), not in loadData: the weekly feature renders
+  // its heatmap — which colors vacation days — before calories' loadData runs.
+  calVacations: (() => { try { return JSON.parse(localStorage.getItem('calorie_vacations') || '{}'); } catch (err) { return {}; } })(),
   calActivePerson: loadActivePerson('calActivePerson'),
   calViewedMonth: null,
   calSelectedMonthDate: null,
