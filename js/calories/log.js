@@ -13,7 +13,7 @@ function calRenderStreakBadge() {
   if (!el) return;
   const streak = calCurrentStreak(state.calActivePerson);
   el.innerHTML = streak > 0
-    ? `<span class="tr-streak-badge" title="Consecutive days with at least one food item logged">&#128293; ${streak}-day logging streak</span>`
+    ? `<span class="tr-streak-badge" title="Consecutive days with at least one food item logged (vacation days don't break it)">&#128293; ${streak}-day logging streak</span>`
     : '';
 }
 

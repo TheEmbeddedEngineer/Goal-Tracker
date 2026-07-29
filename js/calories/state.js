@@ -76,13 +76,18 @@ export function calDayItems(person, dateStr) {
 
 // Consecutive days with at least one food item logged, ending today — or yesterday if
 // today hasn't been logged yet, so the streak doesn't look broken mid-day before there's
-// been a chance to log anything.
+// been a chance to log anything. Vacation days are transparent: you weren't tracking on
+// vacation, so an unlogged vacation day neither counts toward the streak nor breaks it —
+// the streak spans right across the vacation (same rule as the weekly no-fine streak).
 export function calCurrentStreak(person) {
   let d = new Date();
-  if (calDayItems(person, dstr(d)).length === 0) d.setDate(d.getDate() - 1);
+  // Don't let an unlogged today (or a vacation today) look like a broken streak.
+  if (calDayItems(person, dstr(d)).length === 0 && !calIsVacationDay(dstr(d))) d.setDate(d.getDate() - 1);
   let streak = 0;
-  while (calDayItems(person, dstr(d)).length > 0) {
-    streak++;
+  for (let guard = 0; guard < 1000; guard++) {
+    const ds = dstr(d);
+    if (calDayItems(person, ds).length > 0) streak++;
+    else if (!calIsVacationDay(ds)) break; // a real unlogged day ends the streak; vacation is skipped
     d.setDate(d.getDate() - 1);
   }
   return streak;
