@@ -233,28 +233,6 @@ export function calCumulativeDeficit(person) {
   return total;
 }
 
-// A day only counts toward the deficit total if it has BOTH a burn entry and logged food
-// (see calDailyDeficit) — most days that are missing one or the other drop out silently.
-// This tells you how much of the tracked window actually got counted, so the big total
-// doesn't read as more complete than it is.
-function calDeficitDayCoverage(person) {
-  const allDates = [...Object.keys(state.calBurnLog[person] || {}), ...Object.keys(state.calEntries[person] || {})];
-  if (allDates.length === 0) return { counted: 0, totalDays: 0 };
-  const start = parseDate(allDates.sort()[0]);
-  const spanDays = Math.floor((new Date() - start) / 86400000) + 1;
-  // Vacation days are left out of the denominator too — they're not "missing
-  // coverage", they're days that were never supposed to be tracked.
-  let counted = 0, totalDays = 0;
-  for (let i = 0; i < spanDays; i++) {
-    const d = new Date(start); d.setDate(d.getDate() + i);
-    const ds = dstr(d);
-    if (calIsVacationDay(ds)) continue;
-    totalDays++;
-    if (calDailyDeficit(person, ds) !== null) counted++;
-  }
-  return { counted, totalDays };
-}
-
 export function calRenderDeficitCard() {
   const el = document.getElementById('calDeficitBig');
   const card = document.getElementById('calDeficitCard');
@@ -268,7 +246,6 @@ export function calRenderDeficitCard() {
   const weekTotal = calWeekDeficit(state.calActivePerson, getMonday(new Date()));
   const pct = Math.max(0, Math.min(100, (total / CAL_DEFICIT_GOAL) * 100));
   const kg = total / CAL_KCAL_PER_KG;
-  const coverage = calDeficitDayCoverage(state.calActivePerson);
   el.innerHTML = `
     <div style="text-align:center; padding:8px 0;">
       <div style="font-size:36px; font-weight:700; color:var(--${state.calActivePerson});">${Math.round(total).toLocaleString()}</div>
@@ -278,7 +255,6 @@ export function calRenderDeficitCard() {
       </div>
     </div>
     <div class="recap-row"><span class="rname">This week's deficit</span><span class="rvalue">${Math.round(weekTotal).toLocaleString()} kcal</span></div>
-    <div class="recap-row" title="A day only counts if it has both a calories-burned entry and logged food"><span class="rname">Days counted</span><span class="rvalue">${coverage.counted} of ${coverage.totalDays}</span></div>
   `;
 }
 
