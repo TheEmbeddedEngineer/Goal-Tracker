@@ -90,6 +90,42 @@ export function wkSubscribeToCloud(code) {
   });
 }
 
+// Background writers (auto-check, threshold-freeze) must NEVER push the whole entries
+// tree: booted from localStorage before the cloud snapshot lands, that tree can carry a
+// stale `screen` value (the one field the user sets by hand and auto-check has no say
+// over), and a full merge push would overwrite a good remote screen check with the
+// stale one. This lost real screen-time checks — the iPhone Health shortcut opens the
+// app daily and fires the boot-time auto-check on stale local state. So auto-check
+// writes ONLY the sport/nutrition leaves it actually changed: a nested merge write of
+// just those leaves leaves `screen` (and every untouched day) alone on the server.
+export async function wkPushAutoChecks(patch) {
+  if (!coupleCode || wkApplyingRemote) return;
+  const entries = {};
+  ['p1', 'p2'].forEach(pk => { if (Object.keys(patch[pk] || {}).length) entries[pk] = patch[pk]; });
+  if (Object.keys(entries).length === 0) return;
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, 'trackers', coupleCode), { entries }, { merge: true });
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (weekly): could not save');
+  }
+}
+
+// The threshold-freeze (see wkThresholdsForWeek) only ever changes weeklyThresholds, so
+// it writes only that field — same reason as wkPushAutoChecks: a render-path push of the
+// full entries tree could clobber a manual screen check with a stale one.
+export async function wkPushWeeklyThresholds() {
+  if (!coupleCode || wkApplyingRemote) return;
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, 'trackers', coupleCode), { weeklyThresholds: state.wkWeeklyThresholds }, { merge: true });
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (weekly): could not save');
+  }
+}
+
 export async function wkPushToCloud(opts = {}) {
   if (!coupleCode || wkApplyingRemote) return;
   // Capture the payload SYNCHRONOUSLY, before any await: a remote snapshot arriving

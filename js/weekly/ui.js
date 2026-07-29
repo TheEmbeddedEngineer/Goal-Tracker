@@ -1,5 +1,5 @@
 import { CATS, DAY_LABELS, EARLIEST_VISIBLE_WEEK, WK_AUTOCHECK_START, state } from './state.js';
-import { wkPushToCloud } from './sync.js';
+import { wkPushAutoChecks, wkPushToCloud, wkPushWeeklyThresholds } from './sync.js';
 import { confirmWipe, dstr, feature, getMonday, parseDate, saveActivePerson, todayStr } from '../core.js';
 import { renderGlanceBar, renderTodayCard, sharedSettings } from '../shared.js';
 
@@ -79,7 +79,8 @@ export function wkThresholdsForWeek(weekMonday) {
       try { localStorage.setItem('weeklyThresholds', JSON.stringify(state.wkWeeklyThresholds)); } catch (err) {}
       if (!wkFreezePushQueued) {
         wkFreezePushQueued = true;
-        setTimeout(() => { wkFreezePushQueued = false; wkPushToCloud(); }, 0);
+        // Writes ONLY weeklyThresholds — never the entries tree (see wkPushAutoChecks).
+        setTimeout(() => { wkFreezePushQueued = false; wkPushWeeklyThresholds(); }, 0);
       }
     }
     return state.wkWeeklyThresholds[key];
@@ -176,6 +177,10 @@ export function wkRefreshAutoChecks() {
   if (!cal || !cal.isDayGoalMet || !tr || !tr.isSessionOnDate) return;
   const today = todayStr();
   let changed = false;
+  // Accumulate ONLY the sport/nutrition leaves this pass actually sets, keyed by
+  // person→date, and push exactly those — never the whole entries tree (which could
+  // carry a stale `screen` and clobber a manual screen check; see wkPushAutoChecks).
+  const patch = { p1: {}, p2: {} };
   ['p1', 'p2'].forEach(pk => {
     for (let i = 0; i < 21; i++) {
       const d = new Date(); d.setDate(d.getDate() - i);
@@ -186,15 +191,15 @@ export function wkRefreshAutoChecks() {
       if (!wantNutrition && !wantSport) continue;
       const person = state.wkEntries[pk] || (state.wkEntries[pk] = {});
       const day = person[ds] || (person[ds] = { nutrition: false, screen: false, sport: false });
-      if (wantNutrition && !day.nutrition) { day.nutrition = true; changed = true; }
-      if (wantSport && !day.sport) { day.sport = true; changed = true; }
+      if (wantNutrition && !day.nutrition) { day.nutrition = true; changed = true; (patch[pk][ds] || (patch[pk][ds] = {})).nutrition = true; }
+      if (wantSport && !day.sport) { day.sport = true; changed = true; (patch[pk][ds] || (patch[pk][ds] = {})).sport = true; }
     }
   });
   if (changed) {
     try { localStorage.setItem('entries', JSON.stringify(state.wkEntries)); } catch (err) {}
     wkLoadCheckboxesForDate();
     wkRenderAll();
-    wkPushToCloud();
+    wkPushAutoChecks(patch);
   }
 }
 
