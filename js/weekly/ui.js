@@ -88,12 +88,25 @@ export function wkThresholdsForWeek(weekMonday) {
   return state.wkThresholds;
 }
 
+// Is this a vacation day? Vacation ranges live in the Calories tab's Goals card and
+// reach the weekly feature through the registry (never a direct import). Vacation days
+// are treated as "not tracked" here: they don't count toward the weekly category totals,
+// never get auto-checked, and always render blue — even if some other flow (e.g. the
+// Health shortcut's 10k-steps day) left a stored check on them. The stored data is left
+// intact; the weekly just doesn't consider it.
+function wkIsVacationDay(dateStr) {
+  const f = (feature('calories') || {}).isVacationDay;
+  return f ? f(dateStr) : false;
+}
+
 export function wkCatCountsForWeek(personKey, weekMonday) {
   const counts = { nutrition:0, screen:0, sport:0 };
   const personEntries = state.wkEntries[personKey] || {};
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
-    const day = personEntries[dstr(d)];
+    const ds = dstr(d);
+    if (wkIsVacationDay(ds)) continue; // vacation days aren't considered in the weekly
+    const day = personEntries[ds];
     if (day) { CATS.forEach(([k]) => { if (day[k]) counts[k]++; }); }
   }
   return counts;
@@ -108,21 +121,24 @@ function wkDayCompletionLevel(personKey, dateStr) {
 }
 
 function wkRenderHeatmap(personKey, weekMonday) {
-  const isVacationDay = (feature('calories') || {}).isVacationDay || (() => false);
   const today = todayStr();
   let html = '<div class="heatmap">';
   for (let i=0;i<7;i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate()+i);
     const ds = dstr(d);
-    const level = wkDayCompletionLevel(personKey, ds);
-    let heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
-    let title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
-    // A day with not a single check is a miss once it's over — red, same as the
-    // training calendar (today stays neutral while it's still in progress). Vacation
-    // days go blue instead: nothing was supposed to be logged on them.
-    if (level <= 0) {
-      if (isVacationDay(ds)) { heatVar = 'var(--blue-border)'; title = fmtDate(ds) + ': vacation'; }
-      else if (ds < today) heatVar = 'var(--red-border)';
+    let heatVar, title;
+    if (wkIsVacationDay(ds)) {
+      // Vacation days are blue no matter what's stored — the weekly doesn't consider
+      // them, so a leftover auto-check (e.g. a 10k-steps day) doesn't turn one green.
+      heatVar = 'var(--blue-border)';
+      title = fmtDate(ds) + ': vacation';
+    } else {
+      const level = wkDayCompletionLevel(personKey, ds);
+      heatVar = level < 0 ? 'var(--heat-0)' : `var(--heat-${level})`;
+      title = level < 0 ? fmtDate(ds) + ': not logged' : fmtDate(ds) + ': ' + level + '/3 categories';
+      // A day with not a single check is a miss once it's over — red, same as the
+      // training calendar (today stays neutral while it's still in progress).
+      if (level <= 0 && ds < today) heatVar = 'var(--red-border)';
     }
     html += `<div class="heat-day" data-date="${ds}" data-person="${personKey}" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
   }
@@ -133,21 +149,18 @@ function wkRenderHeatmap(personKey, weekMonday) {
 // Detailed per-category breakdown for a single day, shown on hover/tap of a heatmap square.
 function wkDayDetailText(personKey, dateStr) {
   const label = parseDate(dateStr).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+  if (wkIsVacationDay(dateStr)) return label + ': vacation — not counted in the weekly';
   const day = (state.wkEntries[personKey] || {})[dateStr];
-  const isVacationDay = (feature('calories') || {}).isVacationDay || (() => false);
-  if (!day) return label + (isVacationDay(dateStr) ? ': vacation — nothing to log' : ': nothing logged yet');
+  if (!day) return label + ': nothing logged yet';
   const parts = CATS.map(([k, catLabel]) => (day[k] ? '✓ ' : '✗ ') + catLabel);
   return label + ' — ' + parts.join('   ');
 }
 
-// Does this Mon–Sun week overlap any vacation day? Vacation ranges live in the Calories
-// tab's Goals card and reach here through the registry (never a direct import).
+// Does this Mon–Sun week overlap any vacation day?
 function wkWeekHasVacation(weekMonday) {
-  const isVacationDay = (feature('calories') || {}).isVacationDay;
-  if (!isVacationDay) return false;
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekMonday); d.setDate(d.getDate() + i);
-    if (isVacationDay(dstr(d))) return true;
+    if (wkIsVacationDay(dstr(d))) return true;
   }
   return false;
 }
@@ -203,6 +216,7 @@ export function wkRefreshAutoChecks() {
       const d = new Date(); d.setDate(d.getDate() - i);
       const ds = dstr(d);
       if (ds < WK_AUTOCHECK_START) break;
+      if (wkIsVacationDay(ds)) continue; // never auto-check a vacation day
       const wantNutrition = ds < today && cal.isDayGoalMet(pk, ds);
       const wantSport = tr.isSessionOnDate(pk, ds);
       if (!wantNutrition && !wantSport) continue;
