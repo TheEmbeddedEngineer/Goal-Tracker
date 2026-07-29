@@ -140,9 +140,23 @@ function wkDayDetailText(personKey, dateStr) {
   return label + ' — ' + parts.join('   ');
 }
 
+// Does this Mon–Sun week overlap any vacation day? Vacation ranges live in the Calories
+// tab's Goals card and reach here through the registry (never a direct import).
+function wkWeekHasVacation(weekMonday) {
+  const isVacationDay = (feature('calories') || {}).isVacationDay;
+  if (!isVacationDay) return false;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekMonday); d.setDate(d.getDate() + i);
+    if (isVacationDay(dstr(d))) return true;
+  }
+  return false;
+}
+
 // Consecutive most-recently-completed weeks (not counting the in-progress current week)
 // with no fine, i.e. every category threshold met. Breaks on the first missed week, or
-// hits the app's data horizon.
+// hits the app's data horizon. A week that WOULD be a fine but overlaps a vacation is
+// excused — it neither breaks the streak nor counts toward it (you weren't tracking on
+// vacation, so it's transparent), so a vacation can't wipe out a streak.
 export function wkCurrentStreak(person) {
   let monday = getMonday(new Date());
   monday.setDate(monday.getDate() - 7);
@@ -151,7 +165,10 @@ export function wkCurrentStreak(person) {
     const thresholds = wkThresholdsForWeek(monday);
     const counts = wkCatCountsForWeek(person, monday);
     const fine = CATS.some(([k]) => counts[k] < thresholds[k]);
-    if (fine) break;
+    if (fine) {
+      if (wkWeekHasVacation(monday)) { monday.setDate(monday.getDate() - 7); continue; }
+      break;
+    }
     streak++;
     monday.setDate(monday.getDate() - 7);
   }
@@ -283,10 +300,20 @@ function wkRenderHistory() {
     const monday = parseDate(wk);
     const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
     const thresholds = wkThresholdsForWeek(monday);
+    // A vacation excuses a fine: a week that would otherwise be a fine but overlaps a
+    // vacation shows "Vacation" instead (matches the blue vacation days in the heatmap
+    // and the streak's vacation handling). A week met without a fine still celebrates.
+    const vacationWeek = wkWeekHasVacation(monday);
     const rows = ['p1','p2'].map(pk => {
       const name = pk==='p1' ? sharedSettings.p1 : sharedSettings.p2;
       const counts = wkCatCountsForWeek(pk, monday);
       const fine = CATS.some(([k]) => counts[k] < thresholds[k]);
+      if (fine && vacationWeek) {
+        return `<div class="history-person vacation">
+          <span class="pname">${name}</span>
+          <span class="fine-tag vacation">&#127796; Vacation</span>
+        </div>`;
+      }
       return `<div class="history-person${fine?'':' celebrate'}">
         <span class="pname">${name}</span>
         <span class="fine-tag ${fine?'yes':'no'}">${fine?'Fine':'🎉 You rocked!'}</span>
