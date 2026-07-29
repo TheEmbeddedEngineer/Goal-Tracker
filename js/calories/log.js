@@ -213,11 +213,14 @@ async function calAddItem() {
   document.getElementById('foodNameError').style.display = 'none';
   const nameEn = name.split('/')[0].trim();
   const unit = document.getElementById('foodUnit').value;
-  const amount = parseFloat(document.getElementById('foodGrams').value) || 0;
-  const calories = Math.round(parseFloat(document.getElementById('foodCalories').value) || 0);
-  const protein = calRound2(parseFloat(document.getElementById('foodProtein').value) || 0);
-  const carbs = calRound2(parseFloat(document.getElementById('foodCarbs').value) || 0);
-  const fat = calRound2(parseFloat(document.getElementById('foodFat').value) || 0);
+  // Clamp every numeric field to >= 0: the inputs carry min="0" but that isn't enforced
+  // for typed/programmatic values, and a negative calorie/macro would silently corrupt
+  // the day totals and the deficit (a negative-kcal item inflates the deficit).
+  const amount = Math.max(0, parseFloat(document.getElementById('foodGrams').value) || 0);
+  const calories = Math.max(0, Math.round(parseFloat(document.getElementById('foodCalories').value) || 0));
+  const protein = Math.max(0, calRound2(parseFloat(document.getElementById('foodProtein').value) || 0));
+  const carbs = Math.max(0, calRound2(parseFloat(document.getElementById('foodCarbs').value) || 0));
+  const fat = Math.max(0, calRound2(parseFloat(document.getElementById('foodFat').value) || 0));
   const category = document.getElementById('foodCategory').value || 'Other';
   const locked = document.getElementById('foodLocked').checked;
   const ds = calSelectedDate();

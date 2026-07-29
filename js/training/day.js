@@ -115,7 +115,7 @@ export function trSaveLog(dayKey, list, variant) {
   const weights = {};
   list.forEach((ex, i) => {
     const v = parseFloat(document.getElementById('logW_' + i).value);
-    if (!isNaN(v)) weights[ex[0]] = v;
+    if (!isNaN(v) && v >= 0) weights[ex[0]] = v; // ignore negatives — a negative weight would corrupt the progress chart
   });
   if (Object.keys(weights).length === 0) {
     const errEl = document.getElementById('logError');

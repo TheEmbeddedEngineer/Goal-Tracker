@@ -8,9 +8,9 @@ function weekKeyFor(dateStr) { return dstr(getMonday(parseDate(dateStr))); }
 
 async function wkSaveThresholds() {
   state.wkThresholds = {
-    nutrition: parseInt(document.getElementById('thNutrition').value) || 1,
-    screen: parseInt(document.getElementById('thScreen').value) || 1,
-    sport: parseInt(document.getElementById('thSport').value) || 1
+    nutrition: Math.max(0, parseInt(document.getElementById('thNutrition').value) || 1),
+    screen: Math.max(0, parseInt(document.getElementById('thScreen').value) || 1),
+    sport: Math.max(0, parseInt(document.getElementById('thSport').value) || 1)
   };
   try { localStorage.setItem('settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, thresholds: state.wkThresholds })); } catch (err) {}
   wkRenderAll();

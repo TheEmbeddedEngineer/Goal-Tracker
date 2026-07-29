@@ -100,10 +100,10 @@ function calSaveFoodBankEdit(key, row) {
   const unit = entry.preferredUnit || 'gram';
   entry.category = row.querySelector('.fb-edit-category').value;
   entry[unit] = {
-    calories: Math.round(parseFloat(row.querySelector('.fb-edit-calories').value) || 0),
-    protein: calRound2(parseFloat(row.querySelector('.fb-edit-protein').value) || 0),
-    carbs: calRound2(parseFloat(row.querySelector('.fb-edit-carbs').value) || 0),
-    fat: calRound2(parseFloat(row.querySelector('.fb-edit-fat').value) || 0)
+    calories: Math.max(0, Math.round(parseFloat(row.querySelector('.fb-edit-calories').value) || 0)),
+    protein: Math.max(0, calRound2(parseFloat(row.querySelector('.fb-edit-protein').value) || 0)),
+    carbs: Math.max(0, calRound2(parseFloat(row.querySelector('.fb-edit-carbs').value) || 0)),
+    fat: Math.max(0, calRound2(parseFloat(row.querySelector('.fb-edit-fat').value) || 0))
   };
   entry.locked = row.querySelector('.fb-edit-locked').checked;
   calBankEditingKey = null;

@@ -337,17 +337,20 @@ async function calSaveGoals() {
     }
   });
 
+  // Clamp to >= 0: a negative calorie goal would flip every day to "over", a negative
+  // protein goal would read as always-met, etc.
+  const nn = (id, int) => Math.max(0, (int ? parseInt : parseFloat)(document.getElementById(id).value) || 0);
   state.calGoals = {
     p1: {
-      calories: parseInt(document.getElementById('p1CalGoal').value) || 0,
-      protein: parseInt(document.getElementById('p1ProtGoal').value) || 0,
-      defaultBurn: parseInt(document.getElementById('p1DefaultBurn').value) || 0,
-      weightGoal: parseFloat(document.getElementById('p1WeightGoal').value) || 0
+      calories: nn('p1CalGoal', true),
+      protein: nn('p1ProtGoal', true),
+      defaultBurn: nn('p1DefaultBurn', true),
+      weightGoal: nn('p1WeightGoal', false)
     },
     p2: {
-      calories: parseInt(document.getElementById('p2CalGoal').value) || 0,
-      protein: parseInt(document.getElementById('p2ProtGoal').value) || 0,
-      weightGoal: parseFloat(document.getElementById('p2WeightGoal').value) || 0
+      calories: nn('p2CalGoal', true),
+      protein: nn('p2ProtGoal', true),
+      weightGoal: nn('p2WeightGoal', false)
     }
   };
   try { localStorage.setItem('calorie_settings', JSON.stringify({ p1: sharedSettings.p1, p2: sharedSettings.p2, goals: state.calGoals })); } catch (err) {}
