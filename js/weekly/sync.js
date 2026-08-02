@@ -112,6 +112,23 @@ export async function wkPushAutoChecks(patch) {
   }
 }
 
+// A manual toggle writes ONLY the leaf field(s) the user actually changed for one day
+// — never the whole `entries` tree, and never sibling fields. This is the manual analog
+// of wkPushAutoChecks and closes the last screen-clobber path: previously a row click
+// saved all three checkboxes together, so toggling Sport/Nutrition re-wrote `screen`
+// from a checkbox a mid-interaction cloud snapshot had reverted to a stale value. Unlike
+// the auto-check, an explicit user action may set a field false too.
+export async function wkPushEntryLeaves(pk, ds, fields) {
+  if (!coupleCode || wkApplyingRemote) return;
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, 'trackers', coupleCode), { entries: { [pk]: { [ds]: fields } } }, { merge: true });
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('Sync error (weekly): could not save');
+  }
+}
+
 // The threshold-freeze (see wkThresholdsForWeek) only ever changes weeklyThresholds, so
 // it writes only that field — same reason as wkPushAutoChecks: a render-path push of the
 // full entries tree could clobber a manual screen check with a stale one.

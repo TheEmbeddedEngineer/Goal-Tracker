@@ -1,5 +1,5 @@
 import { CATS, DAY_LABELS, EARLIEST_VISIBLE_WEEK, WK_AUTOCHECK_START, state } from './state.js';
-import { wkPushAutoChecks, wkPushToCloud, wkPushWeeklyThresholds } from './sync.js';
+import { wkPushAutoChecks, wkPushEntryLeaves, wkPushToCloud, wkPushWeeklyThresholds } from './sync.js';
 import { confirmWipe, dstr, feature, getMonday, parseDate, saveActivePerson, todayStr } from '../core.js';
 import { renderGlanceBar, renderTodayCard, sharedSettings } from '../shared.js';
 
@@ -52,17 +52,36 @@ function wkUpdateRowStyles() {
   });
 }
 
-async function wkSaveDay() {
+const WK_CB_CATEGORY = { cbNutrition: 'nutrition', cbScreen: 'screen', cbSport: 'sport' };
+
+// Set one category for the selected day and push ONLY that leaf (see wkPushEntryLeaves)
+// — so toggling one row can never clobber another day-field with a stale checkbox value.
+function wkToggleCategory(category, value) {
+  const pk = state.wkActivePerson;
   const ds = wkSelectedDate();
-  if (!state.wkEntries[state.wkActivePerson]) state.wkEntries[state.wkActivePerson] = {};
-  state.wkEntries[state.wkActivePerson][ds] = {
+  const person = state.wkEntries[pk] || (state.wkEntries[pk] = {});
+  person[ds] = { ...(person[ds] || { nutrition: false, screen: false, sport: false }), [category]: value };
+  try { localStorage.setItem('entries', JSON.stringify(state.wkEntries)); } catch (err) { console.error(err); }
+  wkRenderAll();
+  wkPushEntryLeaves(pk, ds, { [category]: value });
+}
+
+// The "Save this day" button re-affirms the three checkboxes at once. It still writes
+// only this day's three leaves (a scoped nested merge), never the whole entries tree, so
+// it can't clobber other days — but it does write all three, so it's a whole-day intent.
+function wkSaveDay() {
+  const pk = state.wkActivePerson;
+  const ds = wkSelectedDate();
+  const fields = {
     nutrition: document.getElementById('cbNutrition').checked,
     screen: document.getElementById('cbScreen').checked,
     sport: document.getElementById('cbSport').checked
   };
+  const person = state.wkEntries[pk] || (state.wkEntries[pk] = {});
+  person[ds] = { ...(person[ds] || {}), ...fields };
   try { localStorage.setItem('entries', JSON.stringify(state.wkEntries)); } catch (err) { console.error(err); }
   wkRenderAll();
-  wkPushToCloud();
+  wkPushEntryLeaves(pk, ds, fields);
 }
 
 // Freezing runs inside render paths (history, streaks, glance bar), which can visit
@@ -355,9 +374,13 @@ document.getElementById('wkThresholdsToggle').addEventListener('click', () => {
 // re-save of the same state.
 document.querySelectorAll('#section-weekly .goal-row').forEach(row => {
   row.addEventListener('click', (evt) => {
-    if (evt.target.tagName !== 'INPUT') { const cb = row.querySelector('input'); cb.checked = !cb.checked; }
+    const cb = row.querySelector('input');
+    if (evt.target.tagName !== 'INPUT') cb.checked = !cb.checked;
     wkUpdateRowStyles();
-    wkSaveDay();
+    const category = WK_CB_CATEGORY[cb.id];
+    // Write ONLY the toggled field — never re-save the other two from their (possibly
+    // stale) checkboxes, which is what used to clobber the manual Screen tick.
+    if (category) wkToggleCategory(category, cb.checked);
   });
 });
 
