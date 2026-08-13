@@ -276,7 +276,7 @@ export const PLAN_P2 = {
     ],
   }
 };
-export const TR_EXTRA_ACTIVITIES = { p1: ['Tennis'], p2: ['Hyrox', 'Runs'] };
+export const TR_EXTRA_ACTIVITIES = { p1: ['Tennis', 'Football'], p2: ['Hyrox', 'Runs'] };
 
 // Mechanism for renaming an exercise that already has logged weights: map old name ->
 // new name here and trApplyLegacyExerciseRenames() re-keys the logs on next load.
