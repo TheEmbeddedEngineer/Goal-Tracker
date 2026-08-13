@@ -159,10 +159,42 @@ function wkRenderHeatmap(personKey, weekMonday) {
       // training calendar (today stays neutral while it's still in progress).
       if (level <= 0 && ds < today) heatVar = 'var(--red-border)';
     }
-    html += `<div class="heat-day" data-date="${ds}" data-person="${personKey}" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
+    // Mark the square whose day is currently loaded in the "Log a day" form, so it's
+    // obvious which day the checkboxes below belong to.
+    const isLoaded = ds === wkSelectedDate() && personKey === state.wkActivePerson;
+    html += `<div class="heat-day${isLoaded ? ' selected' : ''}" data-date="${ds}" data-person="${personKey}" title="${title}"><div class="heat-square" style="background:${heatVar}"></div><span class="dlabel">${DAY_LABELS[i]}</span></div>`;
   }
   html += '</div>';
   return html;
+}
+
+function wkShowDayDetail(personKey, dateStr) {
+  const target = document.getElementById('wkDayDetail-' + personKey);
+  if (target) target.textContent = wkDayDetailText(personKey, dateStr);
+}
+
+// Tapping a heatmap square loads that day into the "Log a day" form above (switching to
+// that column's person first), so editing a past day is one tap instead of re-picking the
+// date by hand. Read-only: it only moves the form, it never writes — the write happens
+// when a checkbox is actually toggled.
+function wkLoadDayFromHeatmap(personKey, dateStr) {
+  // Future days of the current week can't be logged (the picker caps at today) — just
+  // show what's there.
+  if (dateStr > todayStr()) { wkShowDayDetail(personKey, dateStr); return; }
+  if (personKey !== state.wkActivePerson) {
+    state.wkActivePerson = personKey;
+    saveActivePerson('wkActivePerson', personKey);
+    wkRenderPersonTabs();
+    renderGlanceBar();
+  }
+  document.getElementById('wkDatePicker').value = dateStr;
+  wkLoadCheckboxesForDate();
+  // Re-render so the "loaded day" outline moves to this square; the detail line has to be
+  // written afterwards because this rebuilds #weekCols.
+  wkRenderThisWeek();
+  wkShowDayDetail(personKey, dateStr);
+  const card = document.getElementById('wkLogCard');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // Detailed per-category breakdown for a single day, shown on hover/tap of a heatmap square.
@@ -305,12 +337,9 @@ function wkRenderThisWeek() {
   }).join('');
 
   wrap.querySelectorAll('.heat-day[data-date]').forEach(el => {
-    const show = () => {
-      const target = document.getElementById('wkDayDetail-' + el.dataset.person);
-      if (target) target.textContent = wkDayDetailText(el.dataset.person, el.dataset.date);
-    };
-    el.addEventListener('mouseenter', show);
-    el.addEventListener('click', show);
+    const pk = el.dataset.person, ds = el.dataset.date;
+    el.addEventListener('mouseenter', () => wkShowDayDetail(pk, ds));
+    el.addEventListener('click', () => wkLoadDayFromHeatmap(pk, ds));
   });
 }
 

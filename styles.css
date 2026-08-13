@@ -166,6 +166,7 @@
   .month-day.blank { background:none; }
   .month-day:not(.blank) { cursor:pointer; }
   .month-day.selected { outline:2px solid var(--accent); outline-offset:1px; }
+  .heat-day.selected .heat-square { outline:2px solid var(--accent); outline-offset:1px; }
   .month-legend { display:flex; gap:10px 14px; flex-wrap:wrap; font-size:11px; color:var(--text-muted); }
   .month-legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend-swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
